@@ -167,6 +167,7 @@ void CommonDataSubscriber::depthOdomScan3dCallback(
 		const sensor_msgs::CameraInfoConstPtr& cameraInfoMsg,
 		const sensor_msgs::PointCloud2ConstPtr& scanMsg)
 {
+/*
 	static const char* file_name = "/home/cds-jetson-host/rtabmap/latency_error.txt";
 	static const int buffer_size = 100;
 	static int counter = 0;
@@ -203,7 +204,8 @@ void CommonDataSubscriber::depthOdomScan3dCallback(
 		fs.close();
 		counter = 0;
 	}
-	
+*/
+
 	rtabmap_ros::UserDataConstPtr userDataMsg; // Null
 	sensor_msgs::LaserScan scan2dMsg; // Null
 	rtabmap_ros::OdomInfoConstPtr odomInfoMsg; // null

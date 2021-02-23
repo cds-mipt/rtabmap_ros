@@ -67,7 +67,10 @@ public:
 		scanVoxelSize_(0.0),
 		scanNormalK_(0),
 		scanNormalRadius_(0.0),
-		plugin_loader_("rtabmap_ros", "rtabmap_ros::PluginInterface")
+		scanNormalGroundUp_(0.0),
+		plugin_loader_("rtabmap_ros", "rtabmap_ros::PluginInterface"),
+		scanReceived_(false),
+		cloudReceived_(false)
 	{
 	}
 
@@ -85,10 +88,12 @@ private:
 
 		pnh.param("scan_cloud_max_points",  scanCloudMaxPoints_, scanCloudMaxPoints_);
 		pnh.param("scan_downsampling_step", scanDownsamplingStep_, scanDownsamplingStep_);
-		pnh.param("scan_range_min",		 scanRangeMin_, scanRangeMin_);
-		pnh.param("scan_range_max",		 scanRangeMax_, scanRangeMax_);
-		pnh.param("scan_voxel_size",		scanVoxelSize_, scanVoxelSize_);
-		pnh.param("scan_normal_k",		  scanNormalK_, scanNormalK_);
+		pnh.param("scan_range_min",  scanRangeMin_, scanRangeMin_);
+		pnh.param("scan_range_max",  scanRangeMax_, scanRangeMax_);
+		pnh.param("scan_voxel_size", scanVoxelSize_, scanVoxelSize_);
+		pnh.param("scan_normal_k",   scanNormalK_, scanNormalK_);
+		pnh.param("scan_normal_radius", scanNormalRadius_, scanNormalRadius_);
+		pnh.param("scan_normal_ground_up", scanNormalGroundUp_, scanNormalGroundUp_);
 
 		if (pnh.hasParam("plugins"))
 		{
@@ -125,7 +130,6 @@ private:
 					"The value is still used. Use \"scan_normal_k\" to avoid this warning.");
 			pnh.param("scan_cloud_normal_k", scanNormalK_, scanNormalK_);
 		}
-		pnh.param("scan_normal_radius", scanNormalRadius_, scanNormalRadius_);
 
 		NODELET_INFO("IcpOdometry: scan_cloud_max_points  = %d", scanCloudMaxPoints_);
 		NODELET_INFO("IcpOdometry: scan_downsampling_step = %d", scanDownsamplingStep_);
@@ -134,6 +138,7 @@ private:
 		NODELET_INFO("IcpOdometry: scan_voxel_size        = %f m", scanVoxelSize_);
 		NODELET_INFO("IcpOdometry: scan_normal_k          = %d", scanNormalK_);
 		NODELET_INFO("IcpOdometry: scan_normal_radius     = %f m", scanNormalRadius_);
+		NODELET_INFO("IcpOdometry: scan_normal_ground_up  = %f", scanNormalGroundUp_);
 
 		scan_sub_ = nh.subscribe("scan", 1, &ICPOdometry::callbackScan, this);
 		cloud_sub_ = nh.subscribe("scan_cloud", 1, &ICPOdometry::callbackCloud, this);
@@ -250,10 +255,33 @@ private:
 				}
 			}
 		}
+		iter = parameters.find(Parameters::kIcpPointToPlaneGroundNormalsUp());
+		if(iter != parameters.end())
+		{
+			float value = uStr2Float(iter->second);
+			if(value != 0.0f)
+			{
+				if(!pnh.hasParam("scan_normal_ground_up"))
+				{
+					ROS_WARN("IcpOdometry: Transferring value %s of \"%s\" to ros parameter \"scan_normal_ground_up\" for convenience.", iter->second.c_str(), iter->first.c_str());
+					scanNormalGroundUp_ = value;
+				}
+			}
+		}
 	}
 
 	void callbackScan(const sensor_msgs::LaserScanConstPtr& scanMsg)
 	{
+		if(cloudReceived_)
+		{
+			ROS_ERROR("%s is already receiving clouds on \"%s\", but also "
+					"just received a scan on \"%s\". Both subscribers cannot be "
+					"used at the same time! Disabling scan subscriber.",
+					this->getName().c_str(), cloud_sub_.getTopic().c_str(), scan_sub_.getTopic().c_str());
+			scan_sub_.shutdown();
+			return;
+		}
+		scanReceived_ = true;
 		if(this->isPaused())
 		{
 			return;
@@ -311,7 +339,7 @@ private:
 			pclScan->is_dense = true;
 		}
 
-		cv::Mat scan;
+		LaserScan scan;
 		int maxLaserScans = (int)scanMsg->ranges.size();
 		if(!pclScan->empty() || !pclScanI->empty())
 		{
@@ -373,7 +401,7 @@ private:
 					}
 				}
 				pcl::PointCloud<pcl::PointXYZINormal>::Ptr pclScanINormal;
-				pcl::PointCloud<pcl::PointXYZINormal>::Ptr pclScanNormal;
+				pcl::PointCloud<pcl::PointNormal>::Ptr pclScanNormal;
 				if(hasIntensity)
 				{
 					pclScanINormal.reset(new pcl::PointCloud<pcl::PointXYZINormal>);
@@ -382,7 +410,7 @@ private:
 				}
 				else
 				{
-					pclScanNormal.reset(new pcl::PointCloud<pcl::PointXYZINormal>);
+					pclScanNormal.reset(new pcl::PointCloud<pcl::PointNormal>);
 					pcl::concatenateFields(*pclScan, *normals, *pclScanNormal);
 					scan = util3d::laserScan2dFromPointCloud(*pclScanNormal);
 				}
@@ -431,10 +459,9 @@ private:
 		}
 
 		rtabmap::SensorData data(
-				LaserScan(scan, maxLaserScans, scanMsg->range_max,
-						scan.channels()==6?LaserScan::kXYINormal:
-						scan.channels()==5?LaserScan::kXYNormal:
-						scan.channels()==3?LaserScan::kXYI:LaserScan::kXY,
+				LaserScan(scan,
+						maxLaserScans,
+						scanMsg->range_max,
 						localScanTransform),
 				cv::Mat(),
 				cv::Mat(),
@@ -447,6 +474,16 @@ private:
 
 	void callbackCloud(const sensor_msgs::PointCloud2ConstPtr& pointCloudMsg)
 	{
+		if(scanReceived_)
+		{
+			ROS_ERROR("%s is already receiving scans on \"%s\", but also "
+					"just received a cloud on \"%s\". Both subscribers cannot be "
+					"used at the same time! Disabling cloud subscriber.",
+					this->getName().c_str(), scan_sub_.getTopic().c_str(), cloud_sub_.getTopic().c_str());
+			cloud_sub_.shutdown();
+			return;
+		}
+		cloudReceived_ = true;
 		if(this->isPaused())
 		{
 			return;
@@ -475,37 +512,33 @@ private:
 		}
 		else
 		{
-		cloudMsg = *pointCloudMsg;
+			cloudMsg = *pointCloudMsg;
 		}
 
-		cv::Mat scan;
+		LaserScan scan;
 		bool hasNormals = false;
 		bool hasIntensity = false;
-		if(scanVoxelSize_ == 0.0f)
+		for(unsigned int i=0; i<cloudMsg.fields.size(); ++i)
 		{
-			for(unsigned int i=0; i<cloudMsg.fields.size(); ++i)
+			if(scanVoxelSize_ == 0.0f && cloudMsg.fields[i].name.compare("normal_x") == 0)
 			{
-				if(cloudMsg.fields[i].name.compare("normal_x") == 0)
+				hasNormals = true;
+			}
+			if(cloudMsg.fields[i].name.compare("intensity") == 0)
+			{
+				if(cloudMsg.fields[i].datatype == sensor_msgs::PointField::FLOAT32)
 				{
-					hasNormals = true;
-					break;
+					hasIntensity = true;
 				}
-				if(cloudMsg.fields[i].name.compare("intensity") == 0)
+				else
 				{
-					if(cloudMsg.fields[i].datatype == sensor_msgs::PointField::FLOAT32)
+					static bool warningShown = false;
+					if(!warningShown)
 					{
-						hasIntensity = true;
-					}
-					else
-					{
-						static bool warningShown = false;
-						if(!warningShown)
-						{
-							ROS_WARN("The input scan cloud has an \"intensity\" field "
-									"but the datatype (%d) is not supported. Intensity will be ignored. "
-									"This message is only shown once.", cloudMsg.fields[i].datatype);
-							warningShown = true;
-						}
+						ROS_WARN("The input scan cloud has an \"intensity\" field "
+								"but the datatype (%d) is not supported. Intensity will be ignored. "
+								"This message is only shown once.", cloudMsg.fields[i].datatype);
+						warningShown = true;
 					}
 				}
 			}
@@ -532,6 +565,7 @@ private:
 			scanCloudMaxPoints_ = cloudMsg.width *cloudMsg.height;
 		}
 		int maxLaserScans = scanCloudMaxPoints_;
+
 		if(hasNormals && hasIntensity)
 		{
 			pcl::PointCloud<pcl::PointXYZINormal>::Ptr pclScan(new pcl::PointCloud<pcl::PointXYZINormal>);
@@ -703,14 +737,17 @@ private:
 			}
 		}
 
-		LaserScan laserScan(scan, maxLaserScans, 0,
-				scan.channels()==7?LaserScan::kXYZINormal:
-				scan.channels()==6?LaserScan::kXYZNormal:
-				scan.channels()==4?LaserScan::kXYZI:LaserScan::kXYZ,
+		LaserScan laserScan(scan,
+				maxLaserScans,
+				0,
 				localScanTransform);
 		if(scanRangeMin_ > 0 || scanRangeMax_ > 0)
 		{
 			laserScan = util3d::rangeFiltering(laserScan, scanRangeMin_, scanRangeMax_);
+		}
+		if(!laserScan.isEmpty() && laserScan.hasNormals() && !laserScan.is2d() && scanNormalGroundUp_)
+		{
+			laserScan = util3d::adjustNormalsToViewPoint(laserScan, Eigen::Vector3f(0,0,10), (float)scanNormalGroundUp_);
 		}
 
 		rtabmap::SensorData data(
@@ -741,8 +778,11 @@ private:
 	double scanVoxelSize_;
 	int scanNormalK_;
 	double scanNormalRadius_;
+	double scanNormalGroundUp_;
 	std::vector<boost::shared_ptr<rtabmap_ros::PluginInterface> > plugins_;
 	pluginlib::ClassLoader<rtabmap_ros::PluginInterface> plugin_loader_;
+	bool scanReceived_ = false;
+	bool cloudReceived_ = false;
 
 };
 

@@ -617,7 +617,18 @@ void OdometryROS::processData(const SensorData & data, const ros::Time & stamp, 
 	if(!guessFrameId_.empty())
 	{
 		guessCurrentPose = this->getTransform(guessFrameId_, frameId_, stamp);
-		Transform previousPose = guessPreviousPose_.isNull()?guessCurrentPose:guessPreviousPose_;
+
+		Transform previousPose = guessPreviousPose_;
+		if(guessPreviousPose_.isNull())
+		{
+			previousPose = guessCurrentPose;
+			if(!guessCurrentPose.isNull() && odometry_->getPose().isIdentity())
+			{
+				ROS_INFO("Odometry: init pose with guess %s", guessCurrentPose.prettyPrint().c_str());
+				odometry_->reset(guessCurrentPose);
+			}
+		}
+
 		if(!previousPose.isNull() && !guessCurrentPose.isNull())
 		{
 			if(guess_.isNull())
@@ -823,9 +834,19 @@ void OdometryROS::processData(const SensorData & data, const ros::Time & stamp, 
 		if(odomLocalScanMap_.getNumSubscribers() && !info.localScanMap.isEmpty())
 		{
 			sensor_msgs::PointCloud2 cloudMsg;
-			if(info.localScanMap.hasNormals())
+			if(info.localScanMap.hasNormals() && info.localScanMap.hasIntensity())
+			{
+				pcl::PointCloud<pcl::PointXYZINormal>::Ptr cloud = util3d::laserScanToPointCloudINormal(info.localScanMap, info.localScanMap.localTransform());
+				pcl::toROSMsg(*cloud, cloudMsg);
+			}
+			else if(info.localScanMap.hasNormals())
 			{
 				pcl::PointCloud<pcl::PointNormal>::Ptr cloud = util3d::laserScanToPointCloudNormal(info.localScanMap, info.localScanMap.localTransform());
+				pcl::toROSMsg(*cloud, cloudMsg);
+			}
+			else if(info.localScanMap.hasIntensity())
+			{
+				pcl::PointCloud<pcl::PointXYZI>::Ptr cloud = util3d::laserScanToPointCloudI(info.localScanMap, info.localScanMap.localTransform());
 				pcl::toROSMsg(*cloud, cloudMsg);
 			}
 			else

@@ -166,13 +166,6 @@ public:
 		Parameters::parse(parameters, Parameters::kMemLaserScanNormalK(), laserScanNormalK_);
 		Parameters::parse(parameters, Parameters::kMemLaserScanNormalRadius(), laserScanNormalRadius_);
 
-		if (pnh.param("min_range", minRange_, 0.0f)) {
-			ROS_INFO( "Setting %s parameter \"min_range\"=\"%s\"", ros::this_node::getName().c_str(), uNumber2Str(minRange_).c_str());
-		}
-		if (pnh.param("max_range", maxRange_, 0.0f)) {
-			ROS_INFO( "Setting %s parameter \"max_range\"=\"%s\"", ros::this_node::getName().c_str(), uNumber2Str(maxRange_).c_str());
-		}
-
 		odomSub_ = std::make_unique<message_filters::Subscriber<nav_msgs::Odometry>>(nh_, "odom", 10);
 		pointCloudSub_ = std::make_unique<message_filters::Subscriber<sensor_msgs::PointCloud2>>(nh_, "scan_cloud", 10);
 		sync_ = std::make_unique<message_filters::Synchronizer<syncPolicy>>(syncPolicy(10), *odomSub_, *pointCloudSub_);
@@ -289,8 +282,8 @@ public:
 
 		scan = util3d::commonFiltering(scan,
 				laserScanDownsampleStepSize_,
-				minRange_,
-				maxRange_,
+				0,
+				0,
 				laserScanVoxelSize_,
 				laserScanNormalK_,
 				laserScanNormalRadius_);
@@ -356,9 +349,6 @@ private:
 	float laserScanVoxelSize_;
 	int laserScanNormalK_;
 	float laserScanNormalRadius_;
-
-	float minRange_;
-	float maxRange_;
 };
 
 

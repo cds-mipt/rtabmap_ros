@@ -301,6 +301,9 @@ add_dependencies(rtabmap_plugins ${${PROJECT_NAME}_EXPORTED_TARGETS})
 add_executable(rtabmap src/CoreNode.cpp)
 target_link_libraries(rtabmap ${Libraries})
 
+add_executable(occupancy_grid_builder src/OccupancyGridBuilderNode.cpp)
+target_link_libraries(occupancy_grid_builder ${Libraries} rtabmap_ros)
+
 add_executable(rtabmap_rgbd_odometry src/RGBDOdometryNode.cpp)
 target_link_libraries(rtabmap_rgbd_odometry ${Libraries})
 set_target_properties(rtabmap_rgbd_odometry PROPERTIES OUTPUT_NAME "rgbd_odometry")

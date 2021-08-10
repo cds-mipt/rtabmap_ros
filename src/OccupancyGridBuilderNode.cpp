@@ -58,8 +58,7 @@ public:
 
 		//parameters
 		rtabmap::ParametersMap parameters;
-		uInsert(parameters, rtabmap::Parameters::getDefaultParameters("Grid"));
-		uInsert(parameters, rtabmap::Parameters::getDefaultParameters("Mem"));
+		uInsert(parameters, rtabmap::Parameters::getDefaultParameters());
 
 		if(!configPath.empty())
 		{

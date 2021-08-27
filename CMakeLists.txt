@@ -32,7 +32,7 @@ find_package(find_object_2d)
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 find_package(RTABMap 0.20.13 REQUIRED)
-
+find_package(time_measurer REQUIRED)
 find_package(OpenCV REQUIRED)
 
 IF(RTABMAP_GUI)
@@ -185,6 +185,7 @@ include_directories(
   ${OpenCV_INCLUDE_DIRS}
   ${PCL_INCLUDE_DIRS}
   ${catkin_INCLUDE_DIRS}
+  ${time_measurer_INCLUDE_DIRS}
 )
 
 # libraries
@@ -193,6 +194,7 @@ SET(Libraries
    ${PCL_LIBRARIES}
    ${catkin_LIBRARIES}
    ${RTABMap_LIBRARIES}
+   ${time_measurer_LIBRARIES}
 )
  
 SET(rtabmap_sync_lib_src
@@ -205,6 +207,7 @@ SET(rtabmap_sync_lib_src
    src/impl/CommonDataSubscriberScan.cpp
    src/impl/CommonDataSubscriberOdom.cpp
    src/CoreWrapper.cpp # we put CoreWrapper here instead of plugins lib to avoid long compilation time on plugins lib
+   src/OccupancyGridBuilderWrapper.cpp
 )
 IF(RTABMAP_SYNC_MULTI_RGBD)
   SET(rtabmap_sync_lib_src
@@ -306,7 +309,7 @@ add_executable(rtabmap src/CoreNode.cpp)
 target_link_libraries(rtabmap ${Libraries})
 
 add_executable(occupancy_grid_builder src/OccupancyGridBuilderNode.cpp)
-target_link_libraries(occupancy_grid_builder ${Libraries} rtabmap_ros)
+target_link_libraries(occupancy_grid_builder rtabmap_sync)
 
 add_executable(rtabmap_rgbd_odometry src/RGBDOdometryNode.cpp)
 target_link_libraries(rtabmap_rgbd_odometry ${Libraries})

@@ -1,8 +1,6 @@
 #include "rtabmap_ros/OccupancyGridBuilderWrapper.h"
 #include "time_measurer.h"
 
-using namespace rtabmap;
-
 namespace rtabmap_ros {
 
 rtabmap::ParametersMap OccupancyGridBuilder::readParameters(int argc, char** argv, const ros::NodeHandle& pnh) {
@@ -19,11 +17,11 @@ rtabmap::ParametersMap OccupancyGridBuilder::readParameters(int argc, char** arg
 		{
 			ROS_INFO( "%s: Loading parameters from %s", ros::this_node::getName().c_str(), configPath.c_str());
 			rtabmap::ParametersMap allParameters;
-			Parameters::readINI(configPath.c_str(), allParameters);
+			rtabmap::Parameters::readINI(configPath.c_str(), allParameters);
 			// only update odometry parameters
-			for(ParametersMap::iterator iter=parameters.begin(); iter!=parameters.end(); ++iter)
+			for(rtabmap::ParametersMap::iterator iter=parameters.begin(); iter!=parameters.end(); ++iter)
 			{
-				ParametersMap::iterator jter = allParameters.find(iter->first);
+				rtabmap::ParametersMap::iterator jter = allParameters.find(iter->first);
 				if(jter!=allParameters.end())
 				{
 					iter->second = jter->second;
@@ -63,7 +61,7 @@ rtabmap::ParametersMap OccupancyGridBuilder::readParameters(int argc, char** arg
 			iter->second = uNumber2Str(vInt);
 		}
 
-		if(iter->first.compare(Parameters::kVisMinInliers()) == 0 && atoi(iter->second.c_str()) < 8)
+		if(iter->first.compare(rtabmap::Parameters::kVisMinInliers()) == 0 && atoi(iter->second.c_str()) < 8)
 		{
 			ROS_WARN( "Parameter min_inliers must be >= 8, setting to 8...");
 			iter->second = uNumber2Str(8);
@@ -82,8 +80,8 @@ rtabmap::ParametersMap OccupancyGridBuilder::readParameters(int argc, char** arg
 	}
 
 	// Backward compatibility
-	for(std::map<std::string, std::pair<bool, std::string> >::const_iterator iter=Parameters::getRemovedParameters().begin();
-		iter!=Parameters::getRemovedParameters().end();
+	for(std::map<std::string, std::pair<bool, std::string> >::const_iterator iter=rtabmap::Parameters::getRemovedParameters().begin();
+		iter!=rtabmap::Parameters::getRemovedParameters().end();
 		++iter)
 	{
 		std::string vStr;

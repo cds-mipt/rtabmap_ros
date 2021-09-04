@@ -144,6 +144,7 @@ void OccupancyGridBuilder::commonDepthCallback(
 	addSignatureToOccupancyGrid(signature);
 	nav_msgs::OccupancyGrid map = getOccupancyGridMap();
 	map.header.stamp = odomMsg->header.stamp;
+	map.header.frame_id = odomMsg->header.frame_id;
 	occupancyGridPub_.publish(map);
 	nodeId_++;
 }
@@ -186,6 +187,7 @@ void OccupancyGridBuilder::commonLaserScanCallback(
 	addSignatureToOccupancyGrid(signature);
 	nav_msgs::OccupancyGrid map = getOccupancyGridMap();
 	map.header.stamp = odomMsg->header.stamp;
+	map.header.frame_id = odomMsg->header.frame_id;
 	occupancyGridPub_.publish(map);
 	nodeId_++;
 }
@@ -236,8 +238,6 @@ nav_msgs::OccupancyGrid OccupancyGridBuilder::getOccupancyGridMap() {
 	map.data.resize(map.info.width * map.info.height);
 
 	memcpy(map.data.data(), pixels.data, map.info.width * map.info.height);
-
-	map.header.frame_id = "local_map_lidar";
 	return map;
 }
 

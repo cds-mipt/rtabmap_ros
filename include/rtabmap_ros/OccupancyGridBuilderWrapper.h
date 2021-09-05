@@ -29,6 +29,7 @@
 #include <list>
 #include <vector>
 #include <string>
+#include <fstream>
 
 namespace rtabmap_ros {
 
@@ -41,10 +42,16 @@ private:
 	rtabmap::ParametersMap readRtabmapParameters(int argc, char** argv, const ros::NodeHandle& pnh);
 	void readParameters(const ros::NodeHandle& pnh);
 
+	void loadOccupancyGridForSync();
+	void loadOccupancyGridForAsync();
 	void loadOccupancyGrid();
 	virtual void mainLoop();
-	void saveCells(const rtabmap::Signature& signature, const cv::Mat& groundCells, const cv::Mat& obstacleCells,
-				   const cv::Mat& emptyCells, const cv::Point3f& viewPoint);
+	void saveCellsForSync(const rtabmap::Signature& signature, const cv::Mat& groundCells,
+												const cv::Mat& obstacleCells, const cv::Mat& emptyCells);
+	void saveCellsForAsync(const rtabmap::Signature& signature, const cv::Mat& groundCells,
+											 	 const cv::Mat& obstacleCells, const cv::Mat& emptyCells);
+	void saveCells(const rtabmap::Signature& signature, const cv::Mat& groundCells,
+				   const cv::Mat& obstacleCells, const cv::Mat& emptyCells);
 
 	virtual void commonDepthCallback(
 				const nav_msgs::OdometryConstPtr& odomMsg,
@@ -108,9 +115,12 @@ private:
 	std::map<int, rtabmap::Transform> poses_;
 
 	rtabmap::DBDriver* dbDriver_;
+	std::fstream dbFile_;
 	std::string dbPath_;
 	bool loadDb_;
 	bool saveDb_;
+	bool syncSave_;
+	
 	UMutex dataToSaveMutex_;
 	std::vector<int> nodeIdsToSave_;
 	std::vector<rtabmap::Transform> posesToSave_;

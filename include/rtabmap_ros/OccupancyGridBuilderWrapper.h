@@ -19,17 +19,20 @@
 #include <rtabmap/utilite/ULogger.h>
 #include <rtabmap/core/DBDriver.h>
 #include <rtabmap/core/Compression.h>
+#include <rtabmap/utilite/UThread.h>
+#include <rtabmap/utilite/UMutex.h>
 #include "rtabmap_ros/CommonDataSubscriber.h"
 #include "rtabmap_ros/MsgConversion.h"
 #include "time_measurer.h"
 
 #include <memory>
 #include <list>
+#include <vector>
 #include <string>
 
 namespace rtabmap_ros {
 
-class OccupancyGridBuilder : public CommonDataSubscriber {
+class OccupancyGridBuilder : public CommonDataSubscriber, public UThread {
 public:
     OccupancyGridBuilder(int argc, char** argv);
     ~OccupancyGridBuilder();
@@ -37,6 +40,11 @@ public:
 private:
 	rtabmap::ParametersMap readRtabmapParameters(int argc, char** argv, const ros::NodeHandle& pnh);
 	void readParameters(const ros::NodeHandle& pnh);
+
+	void loadOccupancyGrid();
+	virtual void mainLoop();
+	void saveCells(const rtabmap::Signature& signature, const cv::Mat& groundCells, const cv::Mat& obstacleCells,
+				   const cv::Mat& emptyCells, const cv::Point3f& viewPoint);
 
 	virtual void commonDepthCallback(
 				const nav_msgs::OdometryConstPtr& odomMsg,
@@ -86,15 +94,11 @@ private:
 									   const std::vector<cv::Mat>& localDescriptorsMsgs);
     rtabmap::Signature createSignature(const nav_msgs::OdometryConstPtr& odomMsg,
 									   const sensor_msgs::PointCloud2& scan3dMsg);
-
 	void manageNewSignature(const rtabmap::Signature& signature, ros::Time stamp, std::string frame_id);
 
     void addSignatureToOccupancyGrid(const rtabmap::Signature& signature, cv::Mat& groundCells, cv::Mat& obstacleCells,
 									 cv::Mat& emptyCells, cv::Point3f& viewPoint);
     nav_msgs::OccupancyGrid getOccupancyGridMap();
-
-	void loadOccupancyGrid();
-	void saveOccupancyGrid();
 	
 private:
 	ros::Publisher occupancyGridPub_;
@@ -107,6 +111,12 @@ private:
 	std::string dbPath_;
 	bool loadDb_;
 	bool saveDb_;
+	UMutex dataToSaveMutex_;
+	std::vector<int> nodeIdsToSave_;
+	std::vector<rtabmap::Transform> posesToSave_;
+	std::vector<cv::Mat> groundCellsToSave_;
+	std::vector<cv::Mat> obstacleCellsToSave_;
+	std::vector<cv::Mat> emptyCellsToSave_;
 };
 
 }

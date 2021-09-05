@@ -17,20 +17,26 @@
 #include <rtabmap/utilite/UStl.h>
 #include <rtabmap/utilite/UFile.h>
 #include <rtabmap/utilite/ULogger.h>
+#include <rtabmap/core/DBDriver.h>
+#include <rtabmap/core/Compression.h>
 #include "rtabmap_ros/CommonDataSubscriber.h"
 #include "rtabmap_ros/MsgConversion.h"
+#include "time_measurer.h"
 
 #include <memory>
+#include <list>
+#include <string>
 
 namespace rtabmap_ros {
 
 class OccupancyGridBuilder : public CommonDataSubscriber {
 public:
     OccupancyGridBuilder(int argc, char** argv);
-    ~OccupancyGridBuilder() {};
+    ~OccupancyGridBuilder();
 
 private:
-	rtabmap::ParametersMap readParameters(int argc, char** argv, const ros::NodeHandle& pnh);
+	rtabmap::ParametersMap readRtabmapParameters(int argc, char** argv, const ros::NodeHandle& pnh);
+	void readParameters(const ros::NodeHandle& pnh);
 
 	virtual void commonDepthCallback(
 				const nav_msgs::OdometryConstPtr& odomMsg,
@@ -81,15 +87,26 @@ private:
     rtabmap::Signature createSignature(const nav_msgs::OdometryConstPtr& odomMsg,
 									   const sensor_msgs::PointCloud2& scan3dMsg);
 
-    void addSignatureToOccupancyGrid(const rtabmap::Signature& signature);
+	void manageNewSignature(const rtabmap::Signature& signature, ros::Time stamp, std::string frame_id);
+
+    void addSignatureToOccupancyGrid(const rtabmap::Signature& signature, cv::Mat& groundCells, cv::Mat& obstacleCells,
+									 cv::Mat& emptyCells, cv::Point3f& viewPoint);
     nav_msgs::OccupancyGrid getOccupancyGridMap();
 
+	void loadOccupancyGrid();
+	void saveOccupancyGrid();
+	
 private:
 	ros::Publisher occupancyGridPub_;
 	tf::TransformListener tfListener_;
 	rtabmap::OccupancyGrid occupancyGrid_;
 	int nodeId_ = 1;
 	std::map<int, rtabmap::Transform> poses_;
+
+	rtabmap::DBDriver* dbDriver_;
+	std::string dbPath_;
+	bool loadDb_;
+	bool saveDb_;
 };
 
 }

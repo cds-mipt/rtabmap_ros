@@ -157,6 +157,10 @@ void OccupancyGridBuilder::readParameters(const ros::NodeHandle& pnh) {
 	pnh.param("load_db", loadDb_, false);
 	pnh.param("save_db", saveDb_, false);
 	pnh.param("sync_save", syncSave_, false);
+
+	pnh.param("max_time", max_time_, float(-1));
+	pnh.param("max_distance", max_distance_, float(-1));
+	pnh.param("max_angle", max_angle_, float(-1));
 }
 
 OccupancyGridBuilder::OccupancyGridBuilder(int argc, char** argv) :
@@ -368,6 +372,10 @@ void OccupancyGridBuilder::commonDepthCallback(
 				const std::vector<std::vector<rtabmap_ros::KeyPoint>>& localKeyPoints /* std::vector<std::vector<rtabmap_ros::KeyPoint>>() */,
 				const std::vector<std::vector<rtabmap_ros::Point3f>>& localPoints3d /* std::vector<std::vector<rtabmap_ros::Point3f>>() */,
 				const std::vector<cv::Mat>& localDescriptors /* std::vector<cv::Mat>() */) {
+	bool enoughMovement = movedEnough(odomMsg);
+	if (!enoughMovement) {
+		//return;
+	}
 	MEASURE_BLOCK_TIME(commonDepthCallback);
 	UDEBUG("\n\nReceived new data");
 	const rtabmap::Signature& signature = createSignature(odomMsg, imageMsgs, depthMsgs, cameraInfoMsgs,
@@ -382,10 +390,27 @@ void OccupancyGridBuilder::commonLaserScanCallback(
 			const sensor_msgs::PointCloud2& scan3dMsg,
 			const rtabmap_ros::OdomInfoConstPtr& odomInfoMsg,
 			const rtabmap_ros::GlobalDescriptor& globalDescriptor /* rtabmap_ros::GlobalDescriptor() */) {
+	bool enoughMovement = movedEnough(odomMsg);
+	if (!enoughMovement) {
+		//return;
+	}
 	MEASURE_BLOCK_TIME(commonLaserScanCallback);
 	UDEBUG("\n\nReceived new data");
 	const rtabmap::Signature& signature = createSignature(odomMsg, scan3dMsg);
 	manageNewSignature(signature, odomMsg->header.stamp, odomMsg->header.frame_id);
+}
+
+bool OccupancyGridBuilder::movedEnough(const nav_msgs::OdometryConstPtr& odomMsg) {
+	if (poses_.size() == 0) {
+		return true;
+	}
+	rtabmap::Transform current_pose = rtabmap_ros::transformFromPoseMsg(odomMsg->pose.pose);
+	rtabmap::Transform last_pose = poses_[nodeId_ - 1];
+	float distance = current_pose.getDistance(last_pose);
+	if (distance >= max_distance_) {
+		return true;
+	}
+	return false;
 }
 
 rtabmap::Signature OccupancyGridBuilder::createSignature(const nav_msgs::OdometryConstPtr& odomMsg,

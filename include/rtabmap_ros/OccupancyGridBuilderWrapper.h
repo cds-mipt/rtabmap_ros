@@ -92,6 +92,7 @@ private:
 				const rtabmap_ros::UserDataConstPtr& userDataMsg,
 				const rtabmap_ros::OdomInfoConstPtr& odomInfoMsg) {};
 
+	bool movedEnough(const nav_msgs::OdometryConstPtr& odomMsg);
 	rtabmap::Signature createSignature(const nav_msgs::OdometryConstPtr& odomMsg,
 									   const std::vector<cv_bridge::CvImageConstPtr>& imageMsgs,
 									   const std::vector<cv_bridge::CvImageConstPtr>& depthMsgs,
@@ -127,6 +128,10 @@ private:
 	std::vector<cv::Mat> groundCellsToSave_;
 	std::vector<cv::Mat> obstacleCellsToSave_;
 	std::vector<cv::Mat> emptyCellsToSave_;
+
+	float max_time_;
+	float max_distance_;
+	float max_angle_;
 };
 
 }

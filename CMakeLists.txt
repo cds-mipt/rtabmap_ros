@@ -207,7 +207,6 @@ SET(rtabmap_sync_lib_src
    src/impl/CommonDataSubscriberScan.cpp
    src/impl/CommonDataSubscriberOdom.cpp
    src/CoreWrapper.cpp # we put CoreWrapper here instead of plugins lib to avoid long compilation time on plugins lib
-   src/OccupancyGridBuilderWrapper.cpp
 )
 IF(RTABMAP_SYNC_MULTI_RGBD)
   SET(rtabmap_sync_lib_src
@@ -286,6 +285,9 @@ ENDIF(apriltag_ros_FOUND)
 add_library(rtabmap_sync
    ${rtabmap_sync_lib_src}
 )
+add_library(occupancy_grid_builder_lib
+   src/OccupancyGridBuilderWrapper.cpp
+)
 add_library(rtabmap_ros
    ${rtabmap_ros_lib_src}
 )
@@ -295,6 +297,9 @@ add_library(rtabmap_plugins
 
 target_link_libraries(rtabmap_sync
   rtabmap_ros
+)
+target_link_libraries(occupancy_grid_builder_lib
+   rtabmap_ros rtabmap_sync
 )
 target_link_libraries(rtabmap_ros
   ${Libraries}
@@ -309,7 +314,7 @@ add_executable(rtabmap src/CoreNode.cpp)
 target_link_libraries(rtabmap ${Libraries})
 
 add_executable(occupancy_grid_builder src/OccupancyGridBuilderNode.cpp)
-target_link_libraries(occupancy_grid_builder rtabmap_sync)
+target_link_libraries(occupancy_grid_builder occupancy_grid_builder_lib)
 
 add_executable(rtabmap_rgbd_odometry src/RGBDOdometryNode.cpp)
 target_link_libraries(rtabmap_rgbd_odometry ${Libraries})

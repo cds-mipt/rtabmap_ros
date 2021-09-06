@@ -49,9 +49,9 @@ private:
 	void saveOccupancyGridSimple();
 	void saveCellsForSync(const rtabmap::Signature& signature, const cv::Mat& groundCells,
 						  const cv::Mat& obstacleCells, const cv::Mat& emptyCells);
+	virtual void mainLoop();
 	void saveCellsForAsync(const rtabmap::Signature& signature, const cv::Mat& groundCells,
 						   const cv::Mat& obstacleCells, const cv::Mat& emptyCells);
-	virtual void mainLoop();
 	void saveCells(const rtabmap::Signature& signature, const cv::Mat& groundCells,
 				   const cv::Mat& obstacleCells, const cv::Mat& emptyCells);
 
@@ -103,7 +103,7 @@ private:
 									   const std::vector<cv::Mat>& localDescriptorsMsgs);
     rtabmap::Signature createSignature(const nav_msgs::OdometryConstPtr& odomMsg,
 									   const sensor_msgs::PointCloud2& scan3dMsg);
-	void manageNewSignature(const rtabmap::Signature& signature, ros::Time stamp, std::string frame_id);
+	void processNewSignature(const rtabmap::Signature& signature, ros::Time stamp, std::string frame_id);
 
     void addSignatureToOccupancyGrid(const rtabmap::Signature& signature, cv::Mat& groundCells, cv::Mat& obstacleCells,
 									 cv::Mat& emptyCells, cv::Point3f& viewPoint);

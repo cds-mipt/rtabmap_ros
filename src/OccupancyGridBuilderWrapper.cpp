@@ -340,20 +340,6 @@ void OccupancyGridBuilder::saveCellsForSync(const rtabmap::Signature& signature,
 	writeMatBinary(dbFile_, emptyCells);
 }
 
-void OccupancyGridBuilder::saveCellsForAsync(const rtabmap::Signature& signature, const cv::Mat& groundCells,
-											 const cv::Mat& obstacleCells, const cv::Mat& emptyCells) {
-	dataToSaveMutex_.lock();
-	nodeIdsToSave_.push_back(signature.id());
-	posesToSave_.push_back(signature.getPose());
-	groundCellsToSave_.push_back(groundCells);
-	obstacleCellsToSave_.push_back(obstacleCells);
-	emptyCellsToSave_.push_back(emptyCells);
-	dataToSaveMutex_.unlock();
-	if (nodeIdsToSave_.size() == 1000) {
-		start();
-	}
-}
-
 void OccupancyGridBuilder::mainLoop() {
 	MEASURE_BLOCK_TIME(mainLoop);
 	dataToSaveMutex_.lock();
@@ -387,6 +373,20 @@ void OccupancyGridBuilder::mainLoop() {
 	kill();
 }
 
+void OccupancyGridBuilder::saveCellsForAsync(const rtabmap::Signature& signature, const cv::Mat& groundCells,
+											 const cv::Mat& obstacleCells, const cv::Mat& emptyCells) {
+	dataToSaveMutex_.lock();
+	nodeIdsToSave_.push_back(signature.id());
+	posesToSave_.push_back(signature.getPose());
+	groundCellsToSave_.push_back(groundCells);
+	obstacleCellsToSave_.push_back(obstacleCells);
+	emptyCellsToSave_.push_back(emptyCells);
+	dataToSaveMutex_.unlock();
+	if (nodeIdsToSave_.size() == 1000) {
+		start();
+	}
+}
+
 void OccupancyGridBuilder::saveCells(const rtabmap::Signature& signature, const cv::Mat& groundCells,
 									 const cv::Mat& obstacleCells, const cv::Mat& emptyCells) {
 	MEASURE_BLOCK_TIME(saveCells);
@@ -414,7 +414,7 @@ void OccupancyGridBuilder::commonDepthCallback(
 	UDEBUG("\n\nReceived new data");
 	const rtabmap::Signature& signature = createSignature(odomMsg, imageMsgs, depthMsgs, cameraInfoMsgs,
 														  localKeyPoints, localPoints3d, localDescriptors);
-	manageNewSignature(signature, odomMsg->header.stamp, odomMsg->header.frame_id);
+	processNewSignature(signature, odomMsg->header.stamp, odomMsg->header.frame_id);
 }
 
 void OccupancyGridBuilder::commonLaserScanCallback(
@@ -427,7 +427,7 @@ void OccupancyGridBuilder::commonLaserScanCallback(
 	MEASURE_BLOCK_TIME(commonLaserScanCallback);
 	UDEBUG("\n\nReceived new data");
 	const rtabmap::Signature& signature = createSignature(odomMsg, scan3dMsg);
-	manageNewSignature(signature, odomMsg->header.stamp, odomMsg->header.frame_id);
+	processNewSignature(signature, odomMsg->header.stamp, odomMsg->header.frame_id);
 }
 
 rtabmap::Signature OccupancyGridBuilder::createSignature(const nav_msgs::OdometryConstPtr& odomMsg,
@@ -468,7 +468,7 @@ rtabmap::Signature OccupancyGridBuilder::createSignature(const nav_msgs::Odometr
 	return signature;
 }
 
-void OccupancyGridBuilder::manageNewSignature(const rtabmap::Signature& signature, ros::Time stamp, std::string frame_id) {
+void OccupancyGridBuilder::processNewSignature(const rtabmap::Signature& signature, ros::Time stamp, std::string frame_id) {
 	cv::Mat groundCells, obstacleCells, emptyCells;
 	cv::Point3f viewPoint;
 	addSignatureToOccupancyGrid(signature, groundCells, obstacleCells, emptyCells, viewPoint);

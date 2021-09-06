@@ -49,9 +49,9 @@ private:
 	void saveOccupancyGridSimple();
 	void saveCellsForSync(const rtabmap::Signature& signature, const cv::Mat& groundCells,
 						  const cv::Mat& obstacleCells, const cv::Mat& emptyCells);
-	virtual void mainLoop();
 	void saveCellsForAsync(const rtabmap::Signature& signature, const cv::Mat& groundCells,
 						   const cv::Mat& obstacleCells, const cv::Mat& emptyCells);
+	virtual void mainLoop();
 	void saveCells(const rtabmap::Signature& signature, const cv::Mat& groundCells,
 				   const cv::Mat& obstacleCells, const cv::Mat& emptyCells);
 

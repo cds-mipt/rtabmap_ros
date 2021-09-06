@@ -315,6 +315,7 @@ void OccupancyGridBuilder::loadOccupancyGridForAsync() {
 }
 
 void OccupancyGridBuilder::saveOccupancyGridSimple() {
+	MEASURE_BLOCK_TIME(saveOccupancyGridSimple);
 	float xMin, yMin, cellSize;
 	const cv::Mat& map = occupancyGrid_.getMap(xMin, yMin);
 	cellSize = occupancyGrid_.getCellSize();
@@ -338,6 +339,20 @@ void OccupancyGridBuilder::saveCellsForSync(const rtabmap::Signature& signature,
 	writeMatBinary(dbFile_, groundCells);
 	writeMatBinary(dbFile_, obstacleCells);
 	writeMatBinary(dbFile_, emptyCells);
+}
+
+void OccupancyGridBuilder::saveCellsForAsync(const rtabmap::Signature& signature, const cv::Mat& groundCells,
+											 const cv::Mat& obstacleCells, const cv::Mat& emptyCells) {
+	dataToSaveMutex_.lock();
+	nodeIdsToSave_.push_back(signature.id());
+	posesToSave_.push_back(signature.getPose());
+	groundCellsToSave_.push_back(groundCells);
+	obstacleCellsToSave_.push_back(obstacleCells);
+	emptyCellsToSave_.push_back(emptyCells);
+	dataToSaveMutex_.unlock();
+	if (nodeIdsToSave_.size() == 1000) {
+		start();
+	}
 }
 
 void OccupancyGridBuilder::mainLoop() {
@@ -371,20 +386,6 @@ void OccupancyGridBuilder::mainLoop() {
 	}
 	dbDriver_->emptyTrashes();
 	kill();
-}
-
-void OccupancyGridBuilder::saveCellsForAsync(const rtabmap::Signature& signature, const cv::Mat& groundCells,
-											 const cv::Mat& obstacleCells, const cv::Mat& emptyCells) {
-	dataToSaveMutex_.lock();
-	nodeIdsToSave_.push_back(signature.id());
-	posesToSave_.push_back(signature.getPose());
-	groundCellsToSave_.push_back(groundCells);
-	obstacleCellsToSave_.push_back(obstacleCells);
-	emptyCellsToSave_.push_back(emptyCells);
-	dataToSaveMutex_.unlock();
-	if (nodeIdsToSave_.size() == 1000) {
-		start();
-	}
 }
 
 void OccupancyGridBuilder::saveCells(const rtabmap::Signature& signature, const cv::Mat& groundCells,

@@ -1,41 +1,41 @@
 #include "rtabmap_ros/OccupancyGridBuilderWrapper.h"
 
-bool writeMatBinary(std::fstream& ofs, const cv::Mat& out_mat)
+bool writeMatBinary(std::fstream& fs, const cv::Mat& out_mat)
 {
-	if(!ofs.is_open()) {
+	if(!fs.is_open()) {
 		return false;
 	}
 	if(out_mat.empty()) {
 		int s = 0;
-		ofs.write((const char*)(&s), sizeof(int));
+		fs.write((const char*)(&s), sizeof(int));
 		return true;
 	}
 	int type = out_mat.type();
-	ofs.write((const char*)(&out_mat.rows), sizeof(int));
-	ofs.write((const char*)(&out_mat.cols), sizeof(int));
-	ofs.write((const char*)(&type), sizeof(int));
-	ofs.write((const char*)(out_mat.data), out_mat.elemSize() * out_mat.total());
+	fs.write((const char*)(&out_mat.rows), sizeof(int));
+	fs.write((const char*)(&out_mat.cols), sizeof(int));
+	fs.write((const char*)(&type), sizeof(int));
+	fs.write((const char*)(out_mat.data), out_mat.elemSize() * out_mat.total());
 
 	return true;
 }
 
-bool readMatBinary(std::fstream& ifs, cv::Mat& in_mat)
+bool readMatBinary(std::fstream& fs, cv::Mat& in_mat)
 {
-	if(!ifs.is_open()) {
+	if(!fs.is_open()) {
 		return false;
 	}
 	
 	int rows, cols, type;
-	ifs.read((char*)(&rows), sizeof(int));
+	fs.read((char*)(&rows), sizeof(int));
 	if(rows == 0) {
 		return true;
 	}
-	ifs.read((char*)(&cols), sizeof(int));
-	ifs.read((char*)(&type), sizeof(int));
+	fs.read((char*)(&cols), sizeof(int));
+	fs.read((char*)(&type), sizeof(int));
 
 	in_mat.release();
 	in_mat.create(rows, cols, type);
-	ifs.read((char*)(in_mat.data), in_mat.elemSize() * in_mat.total());
+	fs.read((char*)(in_mat.data), in_mat.elemSize() * in_mat.total());
 
 	return true;
 }
@@ -156,7 +156,8 @@ void OccupancyGridBuilder::readParameters(const ros::NodeHandle& pnh) {
 	pnh.param("db_path", dbPath_, std::string(""));
 	pnh.param("load_db", loadDb_, false);
 	pnh.param("save_db", saveDb_, false);
-	pnh.param("sync_save", syncSave_, false);
+	pnh.param("simple_save", simpleSave_, true);
+	pnh.param("sync_save", syncSave_, true);
 }
 
 OccupancyGridBuilder::OccupancyGridBuilder(int argc, char** argv) :
@@ -176,39 +177,45 @@ OccupancyGridBuilder::OccupancyGridBuilder(int argc, char** argv) :
 		loadDb_ = false;
 		saveDb_ = false;
 	}
-	if (syncSave_) {
+	if (simpleSave_) {
 		if (loadDb_) {
-			if (saveDb_) {
-				dbFile_.open(dbPath_, std::fstream::in | std::fstream::out | std::fstream::binary | std::fstream::app);
-			} else {
-				dbFile_.open(dbPath_, std::fstream::in | std::fstream::binary | std::fstream::app);
-			}
-			UASSERT(dbFile_.is_open());
-			loadOccupancyGrid();
-			if (!saveDb_) {
-				dbFile_.close();
-			} else {
-				dbFile_.clear();
-				dbFile_.seekp(0, std::fstream::end);
-			}
-		}
-		else if (saveDb_) {
-			dbFile_.open(dbPath_, std::fstream::out | std::fstream::binary | std::fstream::trunc);
+			loadOccupancyGridSimple();
 		}
 	} else {
-		if (loadDb_ || saveDb_) {
-			dbDriver_ = rtabmap::DBDriver::create();
+		if (syncSave_) {
 			if (loadDb_) {
-				bool openOk = dbDriver_->openConnection(dbPath_, false);
-				UASSERT(openOk);
-				loadOccupancyGrid();
-				if (!saveDb_) {
-					dbDriver_->closeConnection();
-					delete dbDriver_;
+				if (saveDb_) {
+					dbFile_.open(dbPath_, std::fstream::in | std::fstream::out | std::fstream::binary | std::fstream::app);
+				} else {
+					dbFile_.open(dbPath_, std::fstream::in | std::fstream::binary | std::fstream::app);
 				}
-			} else {
-				bool openOk = dbDriver_->openConnection(dbPath_, true);
-				UASSERT(openOk);
+				UASSERT(dbFile_.is_open());
+				loadOccupancyGridForSync();
+				if (!saveDb_) {
+					dbFile_.close();
+				} else {
+					dbFile_.clear();
+					dbFile_.seekp(0, std::fstream::end);
+				}
+			}
+			else if (saveDb_) {
+				dbFile_.open(dbPath_, std::fstream::out | std::fstream::binary | std::fstream::trunc);
+			}
+		} else {
+			if (loadDb_ || saveDb_) {
+				dbDriver_ = rtabmap::DBDriver::create();
+				if (loadDb_) {
+					bool openOk = dbDriver_->openConnection(dbPath_, false);
+					UASSERT(openOk);
+					loadOccupancyGridForAsync();
+					if (!saveDb_) {
+						dbDriver_->closeConnection();
+						delete dbDriver_;
+					}
+				} else {
+					bool openOk = dbDriver_->openConnection(dbPath_, true);
+					UASSERT(openOk);
+				}
 			}
 		}
 	}
@@ -218,25 +225,53 @@ OccupancyGridBuilder::OccupancyGridBuilder(int argc, char** argv) :
 
 OccupancyGridBuilder::~OccupancyGridBuilder() {
 	if (saveDb_) {
-		if (syncSave_) {
-			dbFile_.close();
+		if (simpleSave_) {
+			saveOccupancyGridSimple();
 		} else {
-			join();
-			start();
-			join();
-			dbDriver_->closeConnection();
-			delete dbDriver_;
+			if (syncSave_) {
+				dbFile_.close();
+			} else {
+				join();
+				start();
+				join();
+				dbDriver_->closeConnection();
+				delete dbDriver_;
+			}
 		}
 	}
 }
 
+void OccupancyGridBuilder::loadOccupancyGridSimple() {
+	MEASURE_BLOCK_TIME(loadOccupancyGridSimple);
+	std::fstream fs(dbPath_, std::fstream::in | std::fstream::binary | std::fstream::app);
+	UASSERT(fs.is_open());
+	if (fs.peek() != EOF) {
+		float xMin, yMin, cellSize;
+		fs.read((char*)(&xMin), sizeof(float));
+		fs.read((char*)(&yMin), sizeof(float));
+		fs.read((char*)(&cellSize), sizeof(float));
+		UASSERT(cellSize == occupancyGrid_.getCellSize());
+		cv::Mat map;
+		readMatBinary(fs, map);
+		rtabmap::Transform pose(xMin, yMin, 0);
+		poses_[nodeId_] = pose;
+		nodeId_++;
+		occupancyGrid_.setMap(map, xMin, yMin, cellSize, poses_);
+	}
+	fs.close();
+}
+
 void OccupancyGridBuilder::loadOccupancyGridForSync() {
+	MEASURE_BLOCK_TIME(loadOccupancyGridForSync);
 	int maxNodeId = 0;
 	dbFile_.seekg(0, std::fstream::beg);
 	while (dbFile_.peek() != EOF) {
 		int nodeId;
 		dbFile_.read((char*)(&nodeId), sizeof(int));
 		if (nodeId > maxNodeId) maxNodeId = nodeId;
+		float cellSize;
+		dbFile_.read((char*)(&cellSize), sizeof(float));
+		UASSERT(cellSize == occupancyGrid_.getCellSize());
 		cv::Mat poseMat;
 		readMatBinary(dbFile_, poseMat);
 		rtabmap::Transform pose(poseMat);
@@ -252,6 +287,7 @@ void OccupancyGridBuilder::loadOccupancyGridForSync() {
 }
 
 void OccupancyGridBuilder::loadOccupancyGridForAsync() {
+	MEASURE_BLOCK_TIME(loadOccupancyGridForAsync);
 	std::set<int> nodeIds;
 	dbDriver_->getAllNodeIds(nodeIds);
 	int maxNodeId = 0;
@@ -278,12 +314,43 @@ void OccupancyGridBuilder::loadOccupancyGridForAsync() {
 	nodeId_ = maxNodeId + 1;
 }
 
-void OccupancyGridBuilder::loadOccupancyGrid() {
-	MEASURE_BLOCK_TIME(loadOccupancyGrid);
-	if (syncSave_) {
-		loadOccupancyGridForSync();
-	} else {
-		loadOccupancyGridForAsync();
+void OccupancyGridBuilder::saveOccupancyGridSimple() {
+	float xMin, yMin, cellSize;
+	const cv::Mat& map = occupancyGrid_.getMap(xMin, yMin);
+	cellSize = occupancyGrid_.getCellSize();
+	std::fstream fs(dbPath_, std::fstream::out | std::fstream::binary | std::fstream::trunc);
+	UASSERT(fs.is_open());
+	fs.write((const char*)(&xMin), sizeof(float));
+	fs.write((const char*)(&yMin), sizeof(float));
+	fs.write((const char*)(&cellSize), sizeof(float));
+	writeMatBinary(fs, map);
+	fs.close();
+}
+
+void OccupancyGridBuilder::saveCellsForSync(const rtabmap::Signature& signature, const cv::Mat& groundCells,
+											const cv::Mat& obstacleCells, const cv::Mat& emptyCells) {
+	int nodeId = signature.id();
+	dbFile_.write((const char*)(&nodeId), sizeof(int));
+	float cellSize = occupancyGrid_.getCellSize();
+	dbFile_.write((const char*)(&cellSize), sizeof(float));
+	const cv::Mat& poseMat = signature.getPose().dataMatrix();
+	writeMatBinary(dbFile_, poseMat);
+	writeMatBinary(dbFile_, groundCells);
+	writeMatBinary(dbFile_, obstacleCells);
+	writeMatBinary(dbFile_, emptyCells);
+}
+
+void OccupancyGridBuilder::saveCellsForAsync(const rtabmap::Signature& signature, const cv::Mat& groundCells,
+											 const cv::Mat& obstacleCells, const cv::Mat& emptyCells) {
+	dataToSaveMutex_.lock();
+	nodeIdsToSave_.push_back(signature.id());
+	posesToSave_.push_back(signature.getPose());
+	groundCellsToSave_.push_back(groundCells);
+	obstacleCellsToSave_.push_back(obstacleCells);
+	emptyCellsToSave_.push_back(emptyCells);
+	dataToSaveMutex_.unlock();
+	if (nodeIdsToSave_.size() == 1000) {
+		start();
 	}
 }
 
@@ -318,31 +385,6 @@ void OccupancyGridBuilder::mainLoop() {
 	}
 	dbDriver_->emptyTrashes();
 	kill();
-}
-
-void OccupancyGridBuilder::saveCellsForSync(const rtabmap::Signature& signature, const cv::Mat& groundCells,
-											const cv::Mat& obstacleCells, const cv::Mat& emptyCells) {
-	int nodeId = signature.id();
-	dbFile_.write((const char*)(&nodeId), sizeof(int));
-	const cv::Mat& poseMat = signature.getPose().dataMatrix();
-	writeMatBinary(dbFile_, poseMat);
-	writeMatBinary(dbFile_, groundCells);
-	writeMatBinary(dbFile_, obstacleCells);
-	writeMatBinary(dbFile_, emptyCells);
-}
-
-void OccupancyGridBuilder::saveCellsForAsync(const rtabmap::Signature& signature, const cv::Mat& groundCells,
-											 const cv::Mat& obstacleCells, const cv::Mat& emptyCells) {
-	dataToSaveMutex_.lock();
-	nodeIdsToSave_.push_back(signature.id());
-	posesToSave_.push_back(signature.getPose());
-	groundCellsToSave_.push_back(groundCells);
-	obstacleCellsToSave_.push_back(obstacleCells);
-	emptyCellsToSave_.push_back(emptyCells);
-	dataToSaveMutex_.unlock();
-	if (nodeIdsToSave_.size() == 1000) {
-		start();
-	}
 }
 
 void OccupancyGridBuilder::saveCells(const rtabmap::Signature& signature, const cv::Mat& groundCells,
@@ -430,7 +472,7 @@ void OccupancyGridBuilder::manageNewSignature(const rtabmap::Signature& signatur
 	cv::Mat groundCells, obstacleCells, emptyCells;
 	cv::Point3f viewPoint;
 	addSignatureToOccupancyGrid(signature, groundCells, obstacleCells, emptyCells, viewPoint);
-	if (saveDb_) {
+	if (saveDb_ && !simpleSave_) {
 		saveCells(signature, groundCells, obstacleCells, emptyCells);
 	}
 	nav_msgs::OccupancyGrid map = getOccupancyGridMap();

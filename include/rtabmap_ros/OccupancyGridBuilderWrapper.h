@@ -30,6 +30,7 @@
 #include <vector>
 #include <string>
 #include <fstream>
+#include <map>
 
 namespace rtabmap_ros {
 
@@ -42,14 +43,15 @@ private:
 	rtabmap::ParametersMap readRtabmapParameters(int argc, char** argv, const ros::NodeHandle& pnh);
 	void readParameters(const ros::NodeHandle& pnh);
 
+	void loadOccupancyGridSimple();
 	void loadOccupancyGridForSync();
 	void loadOccupancyGridForAsync();
-	void loadOccupancyGrid();
-	virtual void mainLoop();
+	void saveOccupancyGridSimple();
 	void saveCellsForSync(const rtabmap::Signature& signature, const cv::Mat& groundCells,
-												const cv::Mat& obstacleCells, const cv::Mat& emptyCells);
+						  const cv::Mat& obstacleCells, const cv::Mat& emptyCells);
 	void saveCellsForAsync(const rtabmap::Signature& signature, const cv::Mat& groundCells,
-											 	 const cv::Mat& obstacleCells, const cv::Mat& emptyCells);
+						   const cv::Mat& obstacleCells, const cv::Mat& emptyCells);
+	virtual void mainLoop();
 	void saveCells(const rtabmap::Signature& signature, const cv::Mat& groundCells,
 				   const cv::Mat& obstacleCells, const cv::Mat& emptyCells);
 
@@ -119,6 +121,7 @@ private:
 	std::string dbPath_;
 	bool loadDb_;
 	bool saveDb_;
+	bool simpleSave_;
 	bool syncSave_;
 	
 	UMutex dataToSaveMutex_;

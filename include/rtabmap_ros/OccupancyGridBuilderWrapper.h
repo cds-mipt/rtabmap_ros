@@ -34,7 +34,7 @@
 
 namespace rtabmap_ros {
 
-class OccupancyGridBuilder : public CommonDataSubscriber, public UThread {
+class OccupancyGridBuilder : public CommonDataSubscriber {
 public:
     OccupancyGridBuilder(int argc, char** argv);
     ~OccupancyGridBuilder();
@@ -43,17 +43,12 @@ private:
 	rtabmap::ParametersMap readRtabmapParameters(int argc, char** argv, const ros::NodeHandle& pnh);
 	void readParameters(const ros::NodeHandle& pnh);
 
-	void loadOccupancyGridSimple();
-	void loadOccupancyGridForSync();
-	void loadOccupancyGridForAsync();
-	void saveOccupancyGridSimple();
-	void saveCellsForSync(const rtabmap::Signature& signature, const cv::Mat& groundCells,
-						  const cv::Mat& obstacleCells, const cv::Mat& emptyCells);
-	void saveCellsForAsync(const rtabmap::Signature& signature, const cv::Mat& groundCells,
-						   const cv::Mat& obstacleCells, const cv::Mat& emptyCells);
-	virtual void mainLoop();
-	void saveCells(const rtabmap::Signature& signature, const cv::Mat& groundCells,
-				   const cv::Mat& obstacleCells, const cv::Mat& emptyCells);
+	void load();
+	void loadAssembledOccupancyGrid();
+	void loadOccupancyGridCache();
+	void save();
+	void saveAssembledOccupancyGrid();
+	void saveOccupancyGridCache();
 
 	virtual void commonDepthCallback(
 				const nav_msgs::OdometryConstPtr& odomMsg,
@@ -116,20 +111,10 @@ private:
 	int nodeId_ = 1;
 	std::map<int, rtabmap::Transform> poses_;
 
-	rtabmap::DBDriver* dbDriver_;
-	std::fstream dbFile_;
-	std::string dbPath_;
-	bool loadDb_;
-	bool saveDb_;
-	bool simpleSave_;
-	bool syncSave_;
-	
-	UMutex dataToSaveMutex_;
-	std::vector<int> nodeIdsToSave_;
-	std::vector<rtabmap::Transform> posesToSave_;
-	std::vector<cv::Mat> groundCellsToSave_;
-	std::vector<cv::Mat> obstacleCellsToSave_;
-	std::vector<cv::Mat> emptyCellsToSave_;
+	std::string mapPath_;
+	bool loadMap_;
+	bool saveMap_;
+	bool saveAssembledMap_;
 };
 
 }

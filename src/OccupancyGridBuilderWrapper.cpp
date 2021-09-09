@@ -177,6 +177,9 @@ OccupancyGridBuilder::OccupancyGridBuilder(int argc, char** argv) :
 		loadDb_ = false;
 		saveDb_ = false;
 	}
+	if (!simpleSave_ && saveDb_) {
+		UWARN("It is recommended to use simple_save:=true\n");
+	}
 	if (simpleSave_) {
 		if (loadDb_) {
 			loadOccupancyGridSimple();
@@ -457,7 +460,7 @@ rtabmap::Signature OccupancyGridBuilder::createSignature(const nav_msgs::Odometr
 }
 
 rtabmap::Signature OccupancyGridBuilder::createSignature(const nav_msgs::OdometryConstPtr& odomMsg,
-														  const sensor_msgs::PointCloud2& scan3dMsg) {
+														 const sensor_msgs::PointCloud2& scan3dMsg) {
 	rtabmap::LaserScan scan;
 	bool convertionOk = rtabmap_ros::convertScan3dMsg(scan3dMsg, odomMsg->child_frame_id, "", ros::Time(0), scan, tfListener_, 0);
 	UASSERT(convertionOk);

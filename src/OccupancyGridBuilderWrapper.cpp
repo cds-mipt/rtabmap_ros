@@ -5,6 +5,9 @@ bool writeMatBinary(std::fstream& fs, const cv::Mat& out_mat)
 	if(!fs.is_open()) {
 		return false;
 	}
+	if (out_mat.rows == -1 || out_mat.cols == -1) {
+		return false;
+	}
 	if(out_mat.empty()) {
 		int s = 0;
 		fs.write((const char*)(&s), sizeof(int));
@@ -361,9 +364,7 @@ rtabmap::Signature OccupancyGridBuilder::createSignature(const nav_msgs::Odometr
 }
 
 void OccupancyGridBuilder::processNewSignature(const rtabmap::Signature& signature, ros::Time stamp, std::string frame_id) {
-	cv::Mat groundCells, obstacleCells, emptyCells;
-	cv::Point3f viewPoint;
-	addSignatureToOccupancyGrid(signature, groundCells, obstacleCells, emptyCells, viewPoint);
+	addSignatureToOccupancyGrid(signature);
 	nav_msgs::OccupancyGrid map = getOccupancyGridMap();
 	map.header.stamp = stamp;
 	map.header.frame_id = frame_id;
@@ -371,8 +372,9 @@ void OccupancyGridBuilder::processNewSignature(const rtabmap::Signature& signatu
 	nodeId_++;
 }
 
-void OccupancyGridBuilder::addSignatureToOccupancyGrid(const rtabmap::Signature& signature, cv::Mat& groundCells, cv::Mat& obstacleCells,
-													   cv::Mat& emptyCells, cv::Point3f& viewPoint) {
+void OccupancyGridBuilder::addSignatureToOccupancyGrid(const rtabmap::Signature& signature) {
+	cv::Mat groundCells, obstacleCells, emptyCells;
+	cv::Point3f viewPoint;
 	occupancyGrid_.createLocalMap(signature, groundCells, obstacleCells, emptyCells, viewPoint);
 	occupancyGrid_.addToCache(nodeId_, groundCells, obstacleCells, emptyCells);
 	poses_[nodeId_] = signature.getPose();

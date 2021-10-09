@@ -100,8 +100,7 @@ private:
 									   const sensor_msgs::PointCloud2& scan3dMsg);
 	void processNewSignature(const rtabmap::Signature& signature, ros::Time stamp, std::string frame_id);
 
-    void addSignatureToOccupancyGrid(const rtabmap::Signature& signature, cv::Mat& groundCells, cv::Mat& obstacleCells,
-									 cv::Mat& emptyCells, cv::Point3f& viewPoint);
+    void addSignatureToOccupancyGrid(const rtabmap::Signature& signature);
     nav_msgs::OccupancyGrid getOccupancyGridMap();
 	
 private:

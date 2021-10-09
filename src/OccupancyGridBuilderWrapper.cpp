@@ -378,7 +378,21 @@ void OccupancyGridBuilder::addSignatureToOccupancyGrid(const rtabmap::Signature&
 	occupancyGrid_.createLocalMap(signature, groundCells, obstacleCells, emptyCells, viewPoint);
 	occupancyGrid_.addToCache(nodeId_, groundCells, obstacleCells, emptyCells);
 	poses_[nodeId_] = signature.getPose();
-	occupancyGrid_.update(poses_);
+
+	std::map<int, std::pair<std::pair<cv::Mat, cv::Mat>, cv::Mat>> cache = occupancyGrid_.getCache();
+	occupancyGrid_.clear();
+	int last_n_poses = 3;
+	std::map<int, rtabmap::Transform> last_poses;
+	for (int i = 0; i < last_n_poses; i++) {
+		if (nodeId_ - i == 0) {
+			break;
+		}
+		last_poses[nodeId_ - i] = poses_[nodeId_ - i];
+		auto cells = cache[nodeId_ - i];
+		occupancyGrid_.addToCache(nodeId_ - i, cells.first.first, cells.first.second, cells.second);
+	}
+
+	occupancyGrid_.update(last_poses);
 }
 
 nav_msgs::OccupancyGrid OccupancyGridBuilder::getOccupancyGridMap() {

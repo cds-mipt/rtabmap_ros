@@ -2,13 +2,17 @@
 
 bool writeMatBinary(std::fstream& fs, const cv::Mat& out_mat)
 {
-	if(!fs.is_open()) {
+	if (!fs.is_open()) {
+		return false;
+	}
+	if (!out_mat.isContinuous()) {
 		return false;
 	}
 	if (out_mat.rows == -1 || out_mat.cols == -1) {
 		return false;
 	}
-	if(out_mat.empty()) {
+
+	if (out_mat.empty()) {
 		int s = 0;
 		fs.write((const char*)(&s), sizeof(int));
 		return true;
@@ -24,13 +28,13 @@ bool writeMatBinary(std::fstream& fs, const cv::Mat& out_mat)
 
 bool readMatBinary(std::fstream& fs, cv::Mat& in_mat)
 {
-	if(!fs.is_open()) {
+	if (!fs.is_open()) {
 		return false;
 	}
 	
 	int rows, cols, type;
 	fs.read((char*)(&rows), sizeof(int));
-	if(rows == 0) {
+	if (rows == 0) {
 		return true;
 	}
 	fs.read((char*)(&cols), sizeof(int));
@@ -261,7 +265,8 @@ void OccupancyGridBuilder::saveAssembledOccupancyGrid() {
 	fs.write((const char*)(&xMin), sizeof(float));
 	fs.write((const char*)(&yMin), sizeof(float));
 	fs.write((const char*)(&cellSize), sizeof(float));
-	writeMatBinary(fs, map);
+	bool writingOk = writeMatBinary(fs, map);
+	UASSERT(writingOk);
 	fs.close();
 }
 
@@ -284,10 +289,12 @@ void OccupancyGridBuilder::saveOccupancyGridCache() {
 		const cv::Mat& groundCells = gridCells.first.first;
 		const cv::Mat& obstacleCells = gridCells.first.second;
 		const cv::Mat& emptyCells = gridCells.second;
-		writeMatBinary(fs, poseMat);
-		writeMatBinary(fs, groundCells);
-		writeMatBinary(fs, obstacleCells);
-		writeMatBinary(fs, emptyCells);
+		bool writingOk = true;
+		writingOk = writeMatBinary(fs, poseMat) && writingOk;
+		writingOk = writeMatBinary(fs, groundCells) && writingOk;
+		writingOk = writeMatBinary(fs, obstacleCells) && writingOk;
+		writingOk = writeMatBinary(fs, emptyCells) && writingOk;
+		UASSERT(writingOk);
 	}
 	fs.close();
 }
@@ -403,8 +410,8 @@ nav_msgs::OccupancyGrid OccupancyGridBuilder::getOccupancyGridMap() {
 
 	nav_msgs::OccupancyGrid map;
 	map.info.resolution = gridCellSize;
-	map.info.origin.position.x = 0.0;
-	map.info.origin.position.y = 0.0;
+	map.info.origin.position.x = xMin;
+	map.info.origin.position.y = yMin;
 	map.info.origin.position.z = 0.0;
 	map.info.origin.orientation.x = 0.0;
 	map.info.origin.orientation.y = 0.0;
@@ -413,8 +420,6 @@ nav_msgs::OccupancyGrid OccupancyGridBuilder::getOccupancyGridMap() {
 
 	map.info.width = pixels.cols;
 	map.info.height = pixels.rows;
-	map.info.origin.position.x = xMin;
-	map.info.origin.position.y = yMin;
 	map.data.resize(map.info.width * map.info.height);
 
 	memcpy(map.data.data(), pixels.data, map.info.width * map.info.height);

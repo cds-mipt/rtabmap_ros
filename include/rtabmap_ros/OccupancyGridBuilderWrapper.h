@@ -23,7 +23,7 @@
 #include <rtabmap/utilite/UMutex.h>
 #include "rtabmap_ros/CommonDataSubscriber.h"
 #include "rtabmap_ros/MsgConversion.h"
-#include "time_measurer.h"
+#include "time_measurer/time_measurer.h"
 
 #include <memory>
 #include <list>

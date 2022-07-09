@@ -36,8 +36,8 @@ namespace rtabmap_ros {
 
 class OccupancyGridBuilder : public CommonDataSubscriber {
 public:
-    OccupancyGridBuilder(int argc, char** argv);
-    ~OccupancyGridBuilder();
+	OccupancyGridBuilder(int argc, char** argv);
+	~OccupancyGridBuilder();
 
 private:
 	rtabmap::ParametersMap readRtabmapParameters(int argc, char** argv, const ros::NodeHandle& pnh);
@@ -89,19 +89,27 @@ private:
 				const rtabmap_ros::UserDataConstPtr& userDataMsg,
 				const rtabmap_ros::OdomInfoConstPtr& odomInfoMsg) {};
 
-	rtabmap::Signature createSignature(const nav_msgs::OdometryConstPtr& odomMsg,
+	std::unique_ptr<rtabmap::Signature> createSignature(const nav_msgs::OdometryConstPtr& odomMsg,
 									   const std::vector<cv_bridge::CvImageConstPtr>& imageMsgs,
 									   const std::vector<cv_bridge::CvImageConstPtr>& depthMsgs,
 									   const std::vector<sensor_msgs::CameraInfo>& cameraInfoMsgs,
 									   const std::vector<std::vector<rtabmap_ros::KeyPoint>>& localKeyPointsMsgs,
 									   const std::vector<std::vector<rtabmap_ros::Point3f>>& localPoints3dMsgs,
 									   const std::vector<cv::Mat>& localDescriptorsMsgs);
-    rtabmap::Signature createSignature(const nav_msgs::OdometryConstPtr& odomMsg,
+	std::unique_ptr<rtabmap::Signature> createSignature(const nav_msgs::OdometryConstPtr& odomMsg,
+									   const std::vector<cv_bridge::CvImageConstPtr>& imageMsgs,
+									   const std::vector<cv_bridge::CvImageConstPtr>& depthMsgs,
+									   const std::vector<sensor_msgs::CameraInfo>& cameraInfoMsgs,
+									   const sensor_msgs::PointCloud2& scan3dMsg,
+									   const std::vector<std::vector<rtabmap_ros::KeyPoint>>& localKeyPointsMsgs,
+									   const std::vector<std::vector<rtabmap_ros::Point3f>>& localPoints3dMsgs,
+									   const std::vector<cv::Mat>& localDescriptorsMsgs);
+	std::unique_ptr<rtabmap::Signature> createSignature(const nav_msgs::OdometryConstPtr& odomMsg,
 									   const sensor_msgs::PointCloud2& scan3dMsg);
 	void processNewSignature(const rtabmap::Signature& signature, ros::Time stamp, std::string frame_id);
 
-    void addSignatureToOccupancyGrid(const rtabmap::Signature& signature);
-    nav_msgs::OccupancyGrid getOccupancyGridMap();
+	void addSignatureToOccupancyGrid(const rtabmap::Signature& signature);
+	nav_msgs::OccupancyGrid getOccupancyGridMap();
 	
 private:
 	ros::Publisher occupancyGridPub_;

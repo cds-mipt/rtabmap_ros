@@ -172,6 +172,8 @@ OccupancyGridBuilder::OccupancyGridBuilder(int argc, char** argv) :
 
 	occupancyGrid_.parseParameters(parameters);
 	occupancyGridPub_ = nh.advertise<nav_msgs::OccupancyGrid>("grid_map", 1);
+	obstaclesCloudPub_ = nh.advertise<sensor_msgs::PointCloud2>("obstacles_cloud", 1);
+	coloredCloudPub_ = nh.advertise<sensor_msgs::PointCloud2>("colored_cloud", 1);
 	if (mapPath_.empty()) {
 		loadMap_ = false;
 		saveMap_ = false;
@@ -179,6 +181,7 @@ OccupancyGridBuilder::OccupancyGridBuilder(int argc, char** argv) :
 	if (loadMap_) {
 		load();
 	}
+	occupancyGrid_.setCloudAssembling(true);
 	setupCallbacks(nh, pnh, "DataSubscriber");
 }
 
@@ -385,9 +388,16 @@ std::unique_ptr<rtabmap::Signature> OccupancyGridBuilder::createSignature(const 
 													 &keypoints, &points, &descriptors);
 	UASSERT(convertionOk);
 
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr coloredCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+	std::unique_ptr<rtabmap::LaserScan> scanRGB = addRGBToLaserScan(scan, rgb, cameraModels, coloredCloud);
+	sensor_msgs::PointCloud2 coloredCloudMsg;
+	pcl::toROSMsg(*coloredCloud, coloredCloudMsg);
+	coloredCloudMsg.header = scan3dMsg.header;
+	coloredCloudPub_.publish(coloredCloudMsg);
+
 	rtabmap::SensorData data;
 	data.setRGBDImage(rgb, depth, cameraModels);
-	data.setLaserScan(scan);
+	data.setLaserScan(*scanRGB);
 	std::unique_ptr<rtabmap::Signature> signature_ptr(new rtabmap::Signature(data));
 	signature_ptr->setPose(rtabmap_ros::transformFromPoseMsg(odomMsg->pose.pose));
 	return signature_ptr;
@@ -406,6 +416,53 @@ std::unique_ptr<rtabmap::Signature> OccupancyGridBuilder::createSignature(const 
 	return signature_ptr;
 }
 
+std::unique_ptr<rtabmap::LaserScan> OccupancyGridBuilder::addRGBToLaserScan(const rtabmap::LaserScan& scan, const cv::Mat& rgb,
+											 const std::vector<rtabmap::CameraModel>& cameraModels,
+											 pcl::PointCloud<pcl::PointXYZRGB>::Ptr coloredCloud) {
+	cv::Mat scanRGB_data = cv::Mat(1, scan.size(),
+		CV_32FC(rtabmap::LaserScan::channels(rtabmap::LaserScan::Format::kXYZRGB)));
+	UASSERT(scan.format() == rtabmap::LaserScan::Format::kXYZ || scan.format() == rtabmap::LaserScan::Format::kXYZI);
+	UASSERT(rgb.type() == CV_8UC3);
+	rtabmap::Transform camera2LaserScan = cameraModels[0].localTransform().inverse() * scan.localTransform();
+	coloredCloud->clear();
+	for (int i = 0; i < scan.size(); i++) {
+		float* ptr = scanRGB_data.ptr<float>(0, i);
+		ptr[0] = scan.field(i, 0);
+		ptr[1] = scan.field(i, 1);
+		ptr[2] = scan.field(i, 2);
+
+		cv::Point3f camera_point = rtabmap::util3d::transformPoint(*(cv::Point3f*)(scan.data().ptr<float>(0, i)), camera2LaserScan);
+		int u, v;
+		cameraModels[0].reproject(camera_point.x, camera_point.y, camera_point.z, u, v);
+		if (cameraModels[0].inFrame(u, v) && camera_point.z > 0) {
+			int* ptrInt = (int*)ptr;
+			std::uint8_t b, g, r;
+			const std::uint8_t* bgr_color = rgb.ptr<std::uint8_t>(v, u);
+			b = bgr_color[0];
+			g = bgr_color[1];
+			r = bgr_color[2];
+			ptrInt[3] = int(b) | (int(g) << 8) | (int(r) << 16);
+
+			pcl::PointXYZRGB colored_point;
+			colored_point.x = ptr[0];
+			colored_point.y = ptr[1];
+			colored_point.z = ptr[2];
+			colored_point.r = r;
+			colored_point.g = g;
+			colored_point.b = b;
+			coloredCloud->push_back(colored_point);
+		} else {
+			int* ptrInt = (int*)ptr;
+			ptrInt[3] = 0;
+		}
+	}
+
+	std::unique_ptr<rtabmap::LaserScan> scanRGB =
+		std::unique_ptr<rtabmap::LaserScan>(new rtabmap::LaserScan(scanRGB_data, scan.maxPoints(), scan.rangeMax(),
+		rtabmap::LaserScan::Format::kXYZRGB, scan.localTransform()));
+	return scanRGB;
+}
+
 void OccupancyGridBuilder::processNewSignature(const rtabmap::Signature& signature, ros::Time stamp, std::string frame_id) {
 	addSignatureToOccupancyGrid(signature);
 	nav_msgs::OccupancyGrid map = getOccupancyGridMap();
@@ -413,6 +470,22 @@ void OccupancyGridBuilder::processNewSignature(const rtabmap::Signature& signatu
 	map.header.frame_id = frame_id;
 	occupancyGridPub_.publish(map);
 	nodeId_++;
+
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr obstaclesCloud = occupancyGrid_.getMapObstacles();
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr obstaclesCloud_filtered(new pcl::PointCloud<pcl::PointXYZRGB>());
+	for (int i = 0; i < obstaclesCloud->size(); i++)
+	{
+		pcl::PointXYZRGB point = obstaclesCloud->points[i];
+		if (point.r > 0 || point.g > 0 || point.b > 0)
+		{
+			obstaclesCloud_filtered->push_back(point);
+		}
+	}
+	sensor_msgs::PointCloud2 obstaclesCloudMsg;
+	pcl::toROSMsg(*obstaclesCloud_filtered, obstaclesCloudMsg);
+	obstaclesCloudMsg.header.stamp = stamp;
+	obstaclesCloudMsg.header.frame_id = frame_id;
+	obstaclesCloudPub_.publish(obstaclesCloudMsg);
 }
 
 void OccupancyGridBuilder::addSignatureToOccupancyGrid(const rtabmap::Signature& signature) {

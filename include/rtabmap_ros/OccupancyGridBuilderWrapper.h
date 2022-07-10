@@ -8,6 +8,8 @@
 #include <nav_msgs/Odometry.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <nav_msgs/OccupancyGrid.h>
+#include <pcl/filters/passthrough.h>
+#include <pcl_conversions/pcl_conversions.h>
 
 #include <rtabmap/core/OccupancyGrid.h>
 #include <rtabmap/core/LaserScan.h>
@@ -106,6 +108,11 @@ private:
 									   const std::vector<cv::Mat>& localDescriptorsMsgs);
 	std::unique_ptr<rtabmap::Signature> createSignature(const nav_msgs::OdometryConstPtr& odomMsg,
 									   const sensor_msgs::PointCloud2& scan3dMsg);
+
+	std::unique_ptr<rtabmap::LaserScan> addRGBToLaserScan(const rtabmap::LaserScan& scan, const cv::Mat& rgb,
+										const std::vector<rtabmap::CameraModel>& cameraModels,
+										pcl::PointCloud<pcl::PointXYZRGB>::Ptr coloredCloud);
+
 	void processNewSignature(const rtabmap::Signature& signature, ros::Time stamp, std::string frame_id);
 
 	void addSignatureToOccupancyGrid(const rtabmap::Signature& signature);
@@ -113,6 +120,8 @@ private:
 	
 private:
 	ros::Publisher occupancyGridPub_;
+	ros::Publisher obstaclesCloudPub_;
+	ros::Publisher coloredCloudPub_;
 	tf::TransformListener tfListener_;
 	rtabmap::OccupancyGrid occupancyGrid_;
 	int nodeId_ = 1;

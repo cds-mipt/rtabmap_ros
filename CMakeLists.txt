@@ -108,6 +108,7 @@ add_message_files(
    GPS.msg
    Path.msg
    EnvSensor.msg
+   ColoredOccupancyGrid.msg
 )
 
 ## Generate services in the 'srv' folder
@@ -133,6 +134,7 @@ generate_messages(
    std_msgs
    geometry_msgs
    sensor_msgs
+   nav_msgs
 )
 
 #add dynamic reconfigure api
@@ -447,12 +449,14 @@ IF(rviz_FOUND)
           src/rviz/MapCloudDisplay.h
           src/rviz/MapGraphDisplay.h
           src/rviz/InfoDisplay.h
+          src/rviz/ColoredOccupancyGrid.h
         )
 	  ELSE()
 	    qt4_wrap_cpp(MOC_FILES
           src/rviz/MapCloudDisplay.h
           src/rviz/MapGraphDisplay.h
           src/rviz/InfoDisplay.h
+          src/rviz/ColoredOccupancyGrid.h
           src/rviz/OrbitOrientedViewController.h
         )
 	  ENDIF()
@@ -462,12 +466,14 @@ IF(rviz_FOUND)
           src/rviz/MapCloudDisplay.h
           src/rviz/MapGraphDisplay.h
           src/rviz/InfoDisplay.h
+          src/rviz/ColoredOccupancyGrid.h
         )
 	  ELSE()
 	    qt5_wrap_cpp(MOC_FILES
           src/rviz/MapCloudDisplay.h
           src/rviz/MapGraphDisplay.h
           src/rviz/InfoDisplay.h
+          src/rviz/ColoredOccupancyGrid.h
           src/rviz/OrbitOrientedViewController.h
         )
 	  ENDIF()
@@ -476,12 +482,12 @@ IF(rviz_FOUND)
     # tf:message_filters, mixing boost and Qt signals
 	IF(WIN32)
       set_property(
-        SOURCE src/rviz/MapCloudDisplay.cpp src/rviz/MapGraphDisplay.cpp src/rviz/InfoDisplay.cpp
+        SOURCE src/rviz/MapCloudDisplay.cpp src/rviz/MapGraphDisplay.cpp src/rviz/InfoDisplay.cpp src/rviz/ColoredOccupancyGrid.cpp
         PROPERTY COMPILE_DEFINITIONS QT_NO_KEYWORDS
       )
 	ELSE()
 	  set_property(
-        SOURCE src/rviz/MapCloudDisplay.cpp src/rviz/MapGraphDisplay.cpp src/rviz/InfoDisplay.cpp src/rviz/OrbitOrientedViewController.cpp
+        SOURCE src/rviz/MapCloudDisplay.cpp src/rviz/MapGraphDisplay.cpp src/rviz/InfoDisplay.cpp src/rviz/ColoredOccupancyGrid.cpp src/rviz/OrbitOrientedViewController.cpp
         PROPERTY COMPILE_DEFINITIONS QT_NO_KEYWORDS
       )
 	ENDIF()
@@ -489,6 +495,7 @@ IF(rviz_FOUND)
 	   src/rviz/MapCloudDisplay.cpp
        src/rviz/MapGraphDisplay.cpp
        src/rviz/InfoDisplay.cpp
+       src/rviz/ColoredOccupancyGrid.cpp
        ${MOC_FILES}
 	)
 	IF(NOT WIN32)

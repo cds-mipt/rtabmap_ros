@@ -172,6 +172,7 @@ OccupancyGridBuilder::OccupancyGridBuilder(int argc, char** argv) :
 
 	occupancyGrid_.parseParameters(parameters);
 	occupancyGridPub_ = nh.advertise<nav_msgs::OccupancyGrid>("grid_map", 1);
+	coloredOccupancyGridPub_ = nh.advertise<rtabmap_ros::ColoredOccupancyGrid>("colored_grid_map", 1);
 	obstaclesCloudPub_ = nh.advertise<sensor_msgs::PointCloud2>("obstacles_cloud", 1);
 	coloredCloudPub_ = nh.advertise<sensor_msgs::PointCloud2>("colored_cloud", 1);
 	if (mapPath_.empty()) {
@@ -486,6 +487,32 @@ void OccupancyGridBuilder::processNewSignature(const rtabmap::Signature& signatu
 	obstaclesCloudMsg.header.stamp = stamp;
 	obstaclesCloudMsg.header.frame_id = frame_id;
 	obstaclesCloudPub_.publish(obstaclesCloudMsg);
+
+	rtabmap_ros::ColoredOccupancyGrid colored_map;
+	colored_map.header = map.header;
+	colored_map.info = map.info;
+	colored_map.data = map.data;
+	colored_map.r.resize(colored_map.data.size(), 0);
+	colored_map.g.resize(colored_map.data.size(), 0);
+	colored_map.b.resize(colored_map.data.size(), 0);
+	float resolution = colored_map.info.resolution;
+	rtabmap::Transform occupancyMapToOdom = rtabmap_ros::transformFromPoseMsg(colored_map.info.origin).inverse();
+	int width = colored_map.info.width;
+	int height = colored_map.info.height;
+	for (pcl::PointXYZRGB point : obstaclesCloud_filtered->points)
+	{
+		pcl::PointXYZRGB map_point = rtabmap::util3d::transformPoint(point, occupancyMapToOdom);
+		int w = map_point.x / resolution;
+		int h = map_point.y / resolution;
+		if (w >= 0 && w < width && h > 0 && h < height)
+		{
+			int index = w + h * width;
+			colored_map.r[index] = point.r;
+			colored_map.g[index] = point.g;
+			colored_map.b[index] = point.b;
+		}
+	}
+	coloredOccupancyGridPub_.publish(colored_map);
 }
 
 void OccupancyGridBuilder::addSignatureToOccupancyGrid(const rtabmap::Signature& signature) {

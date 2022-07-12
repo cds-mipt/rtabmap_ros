@@ -122,7 +122,6 @@ private:
 private:
 	ros::Publisher occupancyGridPub_;
 	ros::Publisher coloredOccupancyGridPub_;
-	ros::Publisher obstaclesCloudPub_;
 	ros::Publisher coloredCloudPub_;
 	tf::TransformListener tfListener_;
 	rtabmap::OccupancyGrid occupancyGrid_;

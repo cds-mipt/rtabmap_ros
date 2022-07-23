@@ -90,6 +90,9 @@ ColoredOccupancyGridDisplay::ColoredOccupancyGridDisplay()
                                                   "Mahalanobis distance at which object is considered dynamic.",
                                                   this);
   mahalanobis_property_->setMin(0.0f);
+
+  draw_color_only_on_occupied_cells_ = new rviz::BoolProperty("Draw color only on occupied cells", true,
+                                                "TODO", this);
 }
 
 ColoredOccupancyGridDisplay::~ColoredOccupancyGridDisplay()
@@ -266,28 +269,27 @@ void ColoredOccupancyGridDisplay::processMessage(const rtabmap_ros::ColoredOccup
     unsigned char r = msg->r[pixel_index];
     unsigned char g = msg->g[pixel_index];
     unsigned char b = msg->b[pixel_index];
+    bool has_color = (r != 0 || g != 0 || b != 0);
 
-    if (occ == -1)
-    {
-      *pixels_ptr++ = 128; // red
-      *pixels_ptr++ = 128; // green
-      *pixels_ptr++ = 128; // blue
-      *pixels_ptr++ = 255; // alpha
+    if (!has_color || draw_color_only_on_occupied_cells_->getValue().toBool()) {
+      if (occ == -1)
+      {
+        r = 128;
+        g = 128;
+        b = 128;
+      }
+      else if (occ < 50)
+      {
+        r = 255;
+        g = 255;
+        b = 255;
+      }
     }
-    else if (occ >= 50)
-    {
-      *pixels_ptr++ = r; // red
-      *pixels_ptr++ = g; // green
-      *pixels_ptr++ = b; // blue
-      *pixels_ptr++ = 255; // alpha
-    }
-    else
-    {
-      *pixels_ptr++ = 255; // red
-      *pixels_ptr++ = 255; // green
-      *pixels_ptr++ = 255; // blue
-      *pixels_ptr++ = 255; // alpha
-    }
+
+    *pixels_ptr++ = r; // red
+    *pixels_ptr++ = g; // green
+    *pixels_ptr++ = b; // blue
+    *pixels_ptr++ = 255; // alpha
   }
 
   Ogre::DataStreamPtr pixel_stream;

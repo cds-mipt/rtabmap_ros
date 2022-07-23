@@ -105,6 +105,8 @@ protected:
   rviz::QuaternionProperty* orientation_property_;
   rviz::FloatProperty* alpha_property_;
   rviz::BoolProperty* draw_under_property_;
+
+  rviz::BoolProperty* draw_color_only_on_occupied_cells_;
 };
 
 }  // end namespace dogm_rviz_plugin

@@ -55,7 +55,7 @@ class VectorProperty;
 class QuaternionProperty;
 }
 
-namespace rtabmap_ros 
+namespace rtabmap_ros
 {
 
 class ColoredOccupancyGridDisplay : public rviz::MessageFilterDisplay<rtabmap_ros::ColoredOccupancyGrid>
@@ -69,15 +69,10 @@ public:
   virtual void onInitialize();
   virtual void fixedFrameChanged();
   virtual void reset();
-  //virtual void update( float wall_dt, float ros_dt );
-
-  float getResolution() { return resolution_; }
-  int getSize() { return size_; }
 
 protected Q_SLOTS:
   void updateAlpha();
-  //void updateTopic();
-  void updateDrawUnder();
+  void updateDrawBehind();
 
 protected:
 
@@ -92,21 +87,16 @@ protected:
   Ogre::MaterialPtr material_;
   bool loaded_;
 
-  float resolution_;
-  int size_;
   std::string frame_;
   geometry_msgs::Pose latest_map_pose_;
 
-  rviz::FloatProperty* occ_property_;
-  rviz::FloatProperty* mahalanobis_property_;
-
+  rviz::FloatProperty* alpha_property_;
+  rviz::BoolProperty* draw_behind_property_;
   rviz::FloatProperty* resolution_property_;
   rviz::VectorProperty* position_property_;
   rviz::QuaternionProperty* orientation_property_;
-  rviz::FloatProperty* alpha_property_;
-  rviz::BoolProperty* draw_under_property_;
-
-  rviz::BoolProperty* draw_color_only_on_occupied_cells_;
+  rviz::IntProperty* occ_property_;
+  rviz::BoolProperty* draw_color_only_on_occupied_cells_property_;
 };
 
 }  // end namespace dogm_rviz_plugin

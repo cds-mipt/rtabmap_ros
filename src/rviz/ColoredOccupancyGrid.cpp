@@ -52,19 +52,17 @@ namespace rtabmap_ros
 
 ColoredOccupancyGridDisplay::ColoredOccupancyGridDisplay()
   : loaded_(false)
-  , resolution_(0.0f)
-  , size_(0)
 {
   alpha_property_ = new rviz::FloatProperty("Alpha", 1.0,
                                             "Amount of transparency to apply to the map.",
-                                            this, SLOT( updateAlpha()));
+                                            this, SLOT(updateAlpha()));
   alpha_property_->setMin(0.0f);
   alpha_property_->setMax(1.0f);
 
-  draw_under_property_ = new rviz::BoolProperty("Draw Behind", false,
+  draw_behind_property_ = new rviz::BoolProperty("Draw Behind", false,
                                                 "Rendering option, controls whether or not the map is always"
                                                 " drawn behind everything else.",
-                                                this, SLOT(updateDrawUnder()));
+                                                this, SLOT(updateDrawBehind()));
 
   resolution_property_ = new rviz::FloatProperty("Resolution", 0,
                                                  "Resolution of the map. (not editable)", this);
@@ -80,19 +78,14 @@ ColoredOccupancyGridDisplay::ColoredOccupancyGridDisplay()
                                                        this);
   orientation_property_->setReadOnly(true);
 
-  occ_property_ = new rviz::FloatProperty("Occupancy threshold", 0.6,
-                                          "Occupancy amount at which object is considered dynamic.",
-                                          this);
-  occ_property_->setMin(0.0f);
-  occ_property_->setMax(1.0f);
+  occ_property_ = new rviz::IntProperty("Occupancy threshold", 60,
+                                        "Occupancy amount at which cells are considered occupied.",
+                                        this);
+  occ_property_->setMin(0);
+  occ_property_->setMax(100);
 
-  mahalanobis_property_ = new rviz::FloatProperty("Mahalanobis distance", 6.0,
-                                                  "Mahalanobis distance at which object is considered dynamic.",
-                                                  this);
-  mahalanobis_property_->setMin(0.0f);
-
-  draw_color_only_on_occupied_cells_ = new rviz::BoolProperty("Draw color only on occupied cells", true,
-                                                "TODO", this);
+  draw_color_only_on_occupied_cells_property_ = new rviz::BoolProperty("Draw color only on occupied cells", true,
+                                                "Draw color only on occupied cells", this);
 }
 
 ColoredOccupancyGridDisplay::~ColoredOccupancyGridDisplay()
@@ -150,22 +143,22 @@ void ColoredOccupancyGridDisplay::updateAlpha()
   else
   {
     material_->setSceneBlending(Ogre::SBT_REPLACE);
-    material_->setDepthWriteEnabled(!draw_under_property_->getValue().toBool());
+    material_->setDepthWriteEnabled(!draw_behind_property_->getValue().toBool());
   }
 }
 
-void ColoredOccupancyGridDisplay::updateDrawUnder()
+void ColoredOccupancyGridDisplay::updateDrawBehind()
 {
-  bool draw_under = draw_under_property_->getValue().toBool();
+  bool draw_behind = draw_behind_property_->getValue().toBool();
 
   if (alpha_property_->getFloat() >= 0.9998)
   {
-    material_->setDepthWriteEnabled(!draw_under);
+    material_->setDepthWriteEnabled(!draw_behind);
   }
 
   if (manual_object_)
   {
-    if (draw_under)
+    if (draw_behind)
     {
       manual_object_->setRenderQueueGroup(Ogre::RENDER_QUEUE_4);
     }
@@ -202,27 +195,13 @@ void ColoredOccupancyGridDisplay::processMessage(const rtabmap_ros::ColoredOccup
     return;
   }
 
-  // if (msg->info.size == 0)
-  // {
-  //   std::stringstream ss;
-  //   ss << "Map is zero-sized (" << msg->info.size << ")";
-  //   setStatus(rviz::StatusProperty::Error, "DOGM", QString::fromStdString(ss.str()));
-  //   return;
-  // }
-
   clear();
 
   setStatus(rviz::StatusProperty::Ok, "Message", "Map received" );
 
-  // ROS_DEBUG("Received a %d X %d map @ %.3f m/pix\n",
-  //            msg->info.size,
-  //            msg->info.size,
-  //            msg->info.resolution);
-
   float resolution = msg->info.resolution;
   int width = msg->info.width;
   int height = msg->info.height;
-  // int size = msg->info.size;
 
   Ogre::Vector3 position(msg->info.origin.position.x,
                           msg->info.origin.position.y,
@@ -234,10 +213,6 @@ void ColoredOccupancyGridDisplay::processMessage(const rtabmap_ros::ColoredOccup
                                 msg->info.origin.orientation.z);
 
   frame_ = msg->header.frame_id;
-  // if (frame_.empty())
-  // {
-  //   frame_ = "/dogm";
-  // }
 
   // Expand it to be RGB data
   unsigned int pixels_size = width * height;
@@ -246,23 +221,10 @@ void ColoredOccupancyGridDisplay::processMessage(const rtabmap_ros::ColoredOccup
 
   bool map_status_set = false;
   unsigned int num_pixels_to_copy = pixels_size;
-  // if( pixels_size != msg->data.size() )
-  // {
-  //   std::stringstream ss;
-  //   ss << "Data size doesn't match size * size: size = " << size
-  //      << ", data size = " << msg->data.size();
-  //   setStatus( rviz::StatusProperty::Error, "Map", QString::fromStdString(ss.str()));
-  //   map_status_set = true;
-
-  //   // Keep going, but don't read past the end of the data.
-  //   if(msg->data.size() < pixels_size)
-  //   {
-  //     num_pixels_to_copy = msg->data.size();
-  //   }
-  // }
 
   unsigned char* pixels_ptr = pixels;
-  
+  int occ_threshold = occ_property_->getInt();
+  bool draw_color_only_on_occupied_cells = draw_color_only_on_occupied_cells_property_->getValue().toBool();
   for (unsigned int pixel_index = 0; pixel_index < num_pixels_to_copy; pixel_index++)
   {
     char occ = msg->data[pixel_index];
@@ -271,14 +233,14 @@ void ColoredOccupancyGridDisplay::processMessage(const rtabmap_ros::ColoredOccup
     unsigned char b = msg->b[pixel_index];
     bool has_color = (r != 0 || g != 0 || b != 0);
 
-    if (!has_color || draw_color_only_on_occupied_cells_->getValue().toBool()) {
+    if (!has_color || draw_color_only_on_occupied_cells) {
       if (occ == -1)
       {
         r = 128;
         g = 128;
         b = 128;
       }
-      else if (occ < 50)
+      else if (occ < occ_threshold)
       {
         r = 255;
         g = 255;
@@ -368,7 +330,7 @@ void ColoredOccupancyGridDisplay::processMessage(const rtabmap_ros::ColoredOccup
   }
   manual_object_->end();
 
-  if (draw_under_property_->getBool())
+  if (draw_behind_property_->getBool())
   {
     manual_object_->setRenderQueueGroup(Ogre::RENDER_QUEUE_4);
   }

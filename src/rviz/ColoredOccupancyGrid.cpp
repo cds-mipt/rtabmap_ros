@@ -78,14 +78,15 @@ ColoredOccupancyGridDisplay::ColoredOccupancyGridDisplay()
                                                        this);
   orientation_property_->setReadOnly(true);
 
-  occ_property_ = new rviz::IntProperty("Occupancy threshold", 60,
+  occupancy_threshold_property_ = new rviz::IntProperty("Occupancy threshold", 60,
                                         "Occupancy amount at which cells are considered occupied.",
-                                        this);
-  occ_property_->setMin(0);
-  occ_property_->setMax(100);
+                                        this, SLOT(updateOccupancyThreshold()));
+  occupancy_threshold_property_->setMin(0);
+  occupancy_threshold_property_->setMax(100);
 
   draw_color_only_on_occupied_cells_property_ = new rviz::BoolProperty("Draw color only on occupied cells", true,
-                                                "Draw color only on occupied cells", this);
+                                                "Draw color only on occupied cells", this,
+                                                SLOT(updateDrawColorOnlyOnOccupiedCells()));
 }
 
 ColoredOccupancyGridDisplay::~ColoredOccupancyGridDisplay()
@@ -115,6 +116,15 @@ void ColoredOccupancyGridDisplay::reset()
 {
   MFDClass::reset();
   clear();
+}
+
+void ColoredOccupancyGridDisplay::onEnable()
+{
+  MFDClass::onEnable();
+  if (last_msg_)
+  {
+    processMessage(last_msg_);
+  }
 }
 
 void ColoredOccupancyGridDisplay::updateAlpha()
@@ -169,6 +179,22 @@ void ColoredOccupancyGridDisplay::updateDrawBehind()
   }
 }
 
+void ColoredOccupancyGridDisplay::updateDrawColorOnlyOnOccupiedCells()
+{
+  if (last_msg_)
+  {
+    processMessage(last_msg_);
+  }
+}
+
+void ColoredOccupancyGridDisplay::updateOccupancyThreshold()
+{
+  if (last_msg_)
+  {
+    processMessage(last_msg_);
+  }
+}
+
 void ColoredOccupancyGridDisplay::clear()
 {
   setStatus(rviz::StatusProperty::Warn, "Message", "No map received");
@@ -199,6 +225,8 @@ void ColoredOccupancyGridDisplay::processMessage(const rtabmap_ros::ColoredOccup
 
   setStatus(rviz::StatusProperty::Ok, "Message", "Map received" );
 
+  last_msg_ = msg;
+
   float resolution = msg->info.resolution;
   int width = msg->info.width;
   int height = msg->info.height;
@@ -223,7 +251,7 @@ void ColoredOccupancyGridDisplay::processMessage(const rtabmap_ros::ColoredOccup
   unsigned int num_pixels_to_copy = pixels_size;
 
   unsigned char* pixels_ptr = pixels;
-  int occ_threshold = occ_property_->getInt();
+  int occupancy_threshold = occupancy_threshold_property_->getInt();
   bool draw_color_only_on_occupied_cells = draw_color_only_on_occupied_cells_property_->getValue().toBool();
   for (unsigned int pixel_index = 0; pixel_index < num_pixels_to_copy; pixel_index++)
   {
@@ -240,7 +268,7 @@ void ColoredOccupancyGridDisplay::processMessage(const rtabmap_ros::ColoredOccup
         g = 128;
         b = 128;
       }
-      else if (occ < occ_threshold)
+      else if (occ < occupancy_threshold)
       {
         r = 255;
         g = 255;

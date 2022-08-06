@@ -69,10 +69,13 @@ public:
   virtual void onInitialize();
   virtual void fixedFrameChanged();
   virtual void reset();
+  virtual void onEnable();
 
 protected Q_SLOTS:
   void updateAlpha();
   void updateDrawBehind();
+  void updateDrawColorOnlyOnOccupiedCells();
+  void updateOccupancyThreshold();
 
 protected:
 
@@ -81,6 +84,8 @@ protected:
   void clear();
 
   void transformMap();
+
+  rtabmap_ros::ColoredOccupancyGrid::ConstPtr last_msg_;
 
   Ogre::ManualObject* manual_object_;
   Ogre::TexturePtr texture_;
@@ -95,7 +100,7 @@ protected:
   rviz::FloatProperty* resolution_property_;
   rviz::VectorProperty* position_property_;
   rviz::QuaternionProperty* orientation_property_;
-  rviz::IntProperty* occ_property_;
+  rviz::IntProperty* occupancy_threshold_property_;
   rviz::BoolProperty* draw_color_only_on_occupied_cells_property_;
 };
 

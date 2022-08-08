@@ -19,7 +19,7 @@ find_package(catkin REQUIRED COMPONENTS
              cv_bridge roscpp rospy sensor_msgs std_msgs std_srvs nav_msgs geometry_msgs visualization_msgs
              image_transport tf tf_conversions tf2_ros eigen_conversions laser_geometry pcl_conversions 
              pcl_ros nodelet dynamic_reconfigure message_filters class_loader rosgraph_msgs
-             genmsg stereo_msgs move_base_msgs image_geometry pluginlib
+             genmsg stereo_msgs move_base_msgs image_geometry pluginlib colored_occupancy_grid
 )
 
 # Optional components
@@ -108,7 +108,6 @@ add_message_files(
    GPS.msg
    Path.msg
    EnvSensor.msg
-   ColoredOccupancyGrid.msg
 )
 
 ## Generate services in the 'srv' folder
@@ -449,14 +448,12 @@ IF(rviz_FOUND)
           src/rviz/MapCloudDisplay.h
           src/rviz/MapGraphDisplay.h
           src/rviz/InfoDisplay.h
-          src/rviz/ColoredOccupancyGridDisplay.h
         )
 	  ELSE()
 	    qt4_wrap_cpp(MOC_FILES
           src/rviz/MapCloudDisplay.h
           src/rviz/MapGraphDisplay.h
           src/rviz/InfoDisplay.h
-          src/rviz/ColoredOccupancyGridDisplay.h
           src/rviz/OrbitOrientedViewController.h
         )
 	  ENDIF()
@@ -466,14 +463,12 @@ IF(rviz_FOUND)
           src/rviz/MapCloudDisplay.h
           src/rviz/MapGraphDisplay.h
           src/rviz/InfoDisplay.h
-          src/rviz/ColoredOccupancyGridDisplay.h
         )
 	  ELSE()
 	    qt5_wrap_cpp(MOC_FILES
           src/rviz/MapCloudDisplay.h
           src/rviz/MapGraphDisplay.h
           src/rviz/InfoDisplay.h
-          src/rviz/ColoredOccupancyGridDisplay.h
           src/rviz/OrbitOrientedViewController.h
         )
 	  ENDIF()
@@ -482,12 +477,12 @@ IF(rviz_FOUND)
     # tf:message_filters, mixing boost and Qt signals
 	IF(WIN32)
       set_property(
-        SOURCE src/rviz/MapCloudDisplay.cpp src/rviz/MapGraphDisplay.cpp src/rviz/InfoDisplay.cpp src/rviz/ColoredOccupancyGridDisplay.cpp
+        SOURCE src/rviz/MapCloudDisplay.cpp src/rviz/MapGraphDisplay.cpp src/rviz/InfoDisplay.cpp
         PROPERTY COMPILE_DEFINITIONS QT_NO_KEYWORDS
       )
 	ELSE()
 	  set_property(
-        SOURCE src/rviz/MapCloudDisplay.cpp src/rviz/MapGraphDisplay.cpp src/rviz/InfoDisplay.cpp src/rviz/ColoredOccupancyGridDisplay.cpp src/rviz/OrbitOrientedViewController.cpp
+        SOURCE src/rviz/MapCloudDisplay.cpp src/rviz/MapGraphDisplay.cpp src/rviz/InfoDisplay.cpp src/rviz/OrbitOrientedViewController.cpp
         PROPERTY COMPILE_DEFINITIONS QT_NO_KEYWORDS
       )
 	ENDIF()
@@ -495,7 +490,6 @@ IF(rviz_FOUND)
 	   src/rviz/MapCloudDisplay.cpp
        src/rviz/MapGraphDisplay.cpp
        src/rviz/InfoDisplay.cpp
-       src/rviz/ColoredOccupancyGridDisplay.cpp
        ${MOC_FILES}
 	)
 	IF(NOT WIN32)

@@ -172,7 +172,7 @@ OccupancyGridBuilder::OccupancyGridBuilder(int argc, char** argv) :
 
 	occupancyGrid_.parseParameters(parameters);
 	occupancyGridPub_ = nh.advertise<nav_msgs::OccupancyGrid>("grid_map", 1);
-	coloredOccupancyGridPub_ = nh.advertise<rtabmap_ros::ColoredOccupancyGrid>("colored_grid_map", 1);
+	coloredOccupancyGridPub_ = nh.advertise<colored_occupancy_grid::ColoredOccupancyGrid>("colored_grid_map", 1);
 	coloredCloudPub_ = nh.advertise<sensor_msgs::PointCloud2>("colored_cloud", 1);
 	if (mapPath_.empty()) {
 		loadMap_ = false;
@@ -470,7 +470,7 @@ void OccupancyGridBuilder::processNewSignature(const rtabmap::Signature& signatu
 	occupancyGridPub_.publish(map);
 	nodeId_++;
 
-	rtabmap_ros::ColoredOccupancyGrid colored_map;
+	colored_occupancy_grid::ColoredOccupancyGrid colored_map;
 	colored_map.header = map.header;
 	colored_map.info = map.info;
 	colored_map.data = map.data;

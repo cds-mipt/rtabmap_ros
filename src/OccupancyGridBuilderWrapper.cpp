@@ -437,9 +437,9 @@ std::unique_ptr<rtabmap::LaserScan> OccupancyGridBuilder::addRGBToLaserScan(cons
 			int* ptrInt = (int*)ptr;
 			std::uint8_t b, g, r;
 			const std::uint8_t* bgr_color = rgb.ptr<std::uint8_t>(v, u);
-			b = bgr_color[0];
-			g = bgr_color[1];
-			r = bgr_color[2];
+			b = std::max(bgr_color[0], (std::uint8_t)1);
+			g = std::max(bgr_color[1], (std::uint8_t)1);
+			r = std::max(bgr_color[2], (std::uint8_t)1);
 			ptrInt[3] = int(b) | (int(g) << 8) | (int(r) << 16);
 
 			pcl::PointXYZRGB colored_point;

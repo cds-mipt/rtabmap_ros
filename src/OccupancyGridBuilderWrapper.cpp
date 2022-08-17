@@ -160,6 +160,24 @@ void OccupancyGridBuilder::readParameters(const ros::NodeHandle& pnh) {
 	pnh.param("load_map", loadMap_, false);
 	pnh.param("save_map", saveMap_, false);
 	pnh.param("save_assembled_map", saveAssembledMap_, true);
+	pnh.param("min_semantic_range", min_semantic_range_, (float)0);
+	pnh.param("max_semantic_range", max_semantic_range_, (float)0);
+	if (min_semantic_range_ > 0.)
+	{
+		min_semantic_range_sqr_ = min_semantic_range_ * min_semantic_range_;
+	}
+	else
+	{
+		min_semantic_range_sqr_ = 0.;
+	}
+	if (max_semantic_range_ > 0.)
+	{
+		max_semantic_range_sqr_ = max_semantic_range_ * max_semantic_range_;
+	}
+	else
+	{
+		max_semantic_range_sqr_ = 0.;
+	}
 }
 
 OccupancyGridBuilder::OccupancyGridBuilder(int argc, char** argv) :
@@ -433,7 +451,12 @@ std::unique_ptr<rtabmap::LaserScan> OccupancyGridBuilder::addRGBToLaserScan(cons
 		cv::Point3f camera_point = rtabmap::util3d::transformPoint(*(cv::Point3f*)(scan.data().ptr<float>(0, i)), camera2LaserScan);
 		int u, v;
 		cameraModels[0].reproject(camera_point.x, camera_point.y, camera_point.z, u, v);
-		if (cameraModels[0].inFrame(u, v) && camera_point.z > 0) {
+		float camera_point_range_sqr = camera_point.x * camera_point.x + camera_point.y * camera_point.y +
+			camera_point.z * camera_point.z;
+		if (cameraModels[0].inFrame(u, v) && camera_point.z > 0 &&
+			(min_semantic_range_sqr_ == 0. || camera_point_range_sqr > min_semantic_range_sqr_) &&
+			(max_semantic_range_sqr_ == 0. || camera_point_range_sqr < max_semantic_range_sqr_)) {
+
 			int* ptrInt = (int*)ptr;
 			std::uint8_t b, g, r;
 			const std::uint8_t* bgr_color = rgb.ptr<std::uint8_t>(v, u);

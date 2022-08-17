@@ -132,6 +132,11 @@ private:
 	bool loadMap_;
 	bool saveMap_;
 	bool saveAssembledMap_;
+
+	float min_semantic_range_;
+	float max_semantic_range_;
+	float min_semantic_range_sqr_;
+	float max_semantic_range_sqr_;
 };
 
 }

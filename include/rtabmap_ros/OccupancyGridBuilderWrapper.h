@@ -28,12 +28,15 @@
 #include <colored_occupancy_grid/ColoredOccupancyGrid.h>
 #include "time_measurer/time_measurer.h"
 
+#include <nav_msgs/Path.h>
+
 #include <memory>
 #include <list>
 #include <vector>
 #include <string>
 #include <fstream>
 #include <map>
+#include <utility>
 
 namespace rtabmap_ros {
 
@@ -118,15 +121,24 @@ private:
 
 	void addSignatureToOccupancyGrid(const rtabmap::Signature& signature);
 	nav_msgs::OccupancyGrid getOccupancyGridMap();
-	
+
+	void updatePoses(const nav_msgs::Path::ConstPtr& optimized_poses);
+
 private:
 	ros::Publisher occupancyGridPub_;
 	ros::Publisher coloredOccupancyGridPub_;
 	ros::Publisher coloredCloudPub_;
+	ros::Subscriber optimizedPosesSub_;
+
 	tf::TransformListener tfListener_;
-	rtabmap::OccupancyGrid occupancyGrid_;
+
 	int nodeId_ = 1;
+	rtabmap::OccupancyGrid occupancyGrid_;
+
 	std::map<int, rtabmap::Transform> poses_;
+	std::map<int, ros::Time> times_;
+
+	UMutex mutex_;
 
 	std::string mapPath_;
 	bool loadMap_;
@@ -137,6 +149,9 @@ private:
 	float max_semantic_range_;
 	float min_semantic_range_sqr_;
 	float max_semantic_range_sqr_;
+
+	std::string map_frame_;
+	std::string base_link_frame_;
 };
 
 }

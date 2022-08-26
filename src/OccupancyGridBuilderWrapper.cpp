@@ -1,5 +1,7 @@
 #include "rtabmap_ros/OccupancyGridBuilderWrapper.h"
 
+#include <geometry_msgs/TransformStamped.h>
+
 bool writeMatBinary(std::fstream& fs, const cv::Mat& out_mat)
 {
 	if(!fs.is_open()) {
@@ -200,6 +202,52 @@ OccupancyGridBuilder::OccupancyGridBuilder(int argc, char** argv) :
 		load();
 	}
 	setupCallbacks(nh, pnh, "DataSubscriber");
+	optimizedPosesSub_ = nh.subscribe("optimized_poses", 1, &OccupancyGridBuilder::updatePoses, this);
+}
+
+void OccupancyGridBuilder::updatePoses(const nav_msgs::Path::ConstPtr& optimized_poses)
+{
+	UScopeMutex lock(mutex_);
+	poses_.clear();
+	if (optimized_poses->poses.size() == 0)
+	{
+		return;
+	}
+
+	const std::string& map_frame = optimized_poses->header.frame_id;
+	const std::string& base_link_frame = optimized_poses->poses[0].header.frame_id;
+	UASSERT(map_frame == map_frame_);
+	UASSERT(base_link_frame == base_link_frame_);
+
+	tf2_ros::Buffer buffer(ros::Duration(10000));
+	geometry_msgs::TransformStamped tf;
+	tf.header.frame_id = map_frame;
+	tf.child_frame_id = base_link_frame;
+	for (const auto& pose: optimized_poses->poses)
+	{
+		UASSERT(pose.header.frame_id == base_link_frame);
+		tf.header.stamp = pose.header.stamp;
+		tf.transform.translation.x = pose.pose.position.x;
+		tf.transform.translation.y = pose.pose.position.y;
+		tf.transform.translation.z = pose.pose.position.z;
+		tf.transform.rotation.x = pose.pose.orientation.x;
+		tf.transform.rotation.y = pose.pose.orientation.y;
+		tf.transform.rotation.z = pose.pose.orientation.z;
+		tf.transform.rotation.w = pose.pose.orientation.w;
+		buffer.setTransform(tf, "default");
+	}
+
+	for (const auto& id_time: times_)
+	{
+		int nodeId = id_time.first;
+		ros::Time time = id_time.second;
+		try
+		{
+			geometry_msgs::TransformStamped tf = buffer.lookupTransform(map_frame_, base_link_frame_, time);
+			poses_[nodeId] = rtabmap_ros::transformFromGeometryMsg(tf.transform);
+		}
+		catch(...) {}
+	}
 }
 
 OccupancyGridBuilder::~OccupancyGridBuilder() {
@@ -325,11 +373,17 @@ void OccupancyGridBuilder::commonDepthCallback(
 				const std::vector<std::vector<rtabmap_ros::KeyPoint>>& localKeyPoints /* std::vector<std::vector<rtabmap_ros::KeyPoint>>() */,
 				const std::vector<std::vector<rtabmap_ros::Point3f>>& localPoints3d /* std::vector<std::vector<rtabmap_ros::Point3f>>() */,
 				const std::vector<cv::Mat>& localDescriptors /* std::vector<cv::Mat>() */) {
+	UScopeMutex lock(mutex_);
 	MEASURE_BLOCK_TIME(commonDepthCallback);
 	UDEBUG("\n\nReceived new data");
 	UASSERT(isSubscribedToOdom());
 	UASSERT(isSubscribedToRGB());
 	UASSERT(isSubscribedToDepth());
+	if (map_frame_.empty())
+	{
+		map_frame_ = odomMsg->header.frame_id;
+		base_link_frame_ = odomMsg->child_frame_id;
+	}
 	std::unique_ptr<rtabmap::Signature> signature_ptr;
 	if (isSubscribedToScan3d()) {
 		signature_ptr = createSignature(odomMsg, imageMsgs, depthMsgs, cameraInfoMsgs, scan3dMsg,
@@ -348,10 +402,16 @@ void OccupancyGridBuilder::commonLaserScanCallback(
 			const sensor_msgs::PointCloud2& scan3dMsg,
 			const rtabmap_ros::OdomInfoConstPtr& odomInfoMsg,
 			const rtabmap_ros::GlobalDescriptor& globalDescriptor /* rtabmap_ros::GlobalDescriptor() */) {
+	UScopeMutex lock(mutex_);
 	MEASURE_BLOCK_TIME(commonLaserScanCallback);
 	UDEBUG("\n\nReceived new data");
 	UASSERT(isSubscribedToOdom());
 	UASSERT(isSubscribedToScan3d());
+	if (map_frame_.empty())
+	{
+		map_frame_ = odomMsg->header.frame_id;
+		base_link_frame_ = odomMsg->child_frame_id;
+	}
 	std::unique_ptr<rtabmap::Signature> signature_ptr = createSignature(odomMsg, scan3dMsg);
 	processNewSignature(*signature_ptr, odomMsg->header.stamp, odomMsg->header.frame_id);
 }
@@ -369,6 +429,7 @@ std::unique_ptr<rtabmap::Signature> OccupancyGridBuilder::createSignature(const 
 	std::vector<cv::KeyPoint> keypoints;
 	std::vector<cv::Point3f> points;
 	cv::Mat descriptors;
+	times_[nodeId_] = odomMsg->header.stamp;
 	bool convertionOk = rtabmap_ros::convertRGBDMsgs(imageMsgs, depthMsgs, cameraInfoMsgs, odomMsg->child_frame_id, "", ros::Time(0),
 													 rgb, depth, cameraModels, tfListener_, 0,
 													 localKeyPointsMsgs, localPoints3dMsgs, localDescriptorsMsgs,
@@ -390,6 +451,7 @@ std::unique_ptr<rtabmap::Signature> OccupancyGridBuilder::createSignature(const 
 														 const std::vector<std::vector<rtabmap_ros::Point3f>>& localPoints3dMsgs,
 														 const std::vector<cv::Mat>& localDescriptorsMsgs) {
 	rtabmap::LaserScan scan;
+	times_[nodeId_] = odomMsg->header.stamp;
 	bool convertionOk = rtabmap_ros::convertScan3dMsg(scan3dMsg, odomMsg->child_frame_id, "", ros::Time(0), scan, tfListener_, 0);
 	UASSERT(convertionOk);
 
@@ -423,6 +485,7 @@ std::unique_ptr<rtabmap::Signature> OccupancyGridBuilder::createSignature(const 
 std::unique_ptr<rtabmap::Signature> OccupancyGridBuilder::createSignature(const nav_msgs::OdometryConstPtr& odomMsg,
 														 const sensor_msgs::PointCloud2& scan3dMsg) {
 	rtabmap::LaserScan scan;
+	times_[nodeId_] = odomMsg->header.stamp;
 	bool convertionOk = rtabmap_ros::convertScan3dMsg(scan3dMsg, odomMsg->child_frame_id, "", ros::Time(0), scan, tfListener_, 0);
 	UASSERT(convertionOk);
 	rtabmap::SensorData data;

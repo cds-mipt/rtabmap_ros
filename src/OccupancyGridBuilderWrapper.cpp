@@ -4,13 +4,16 @@
 
 bool writeMatBinary(std::fstream& fs, const cv::Mat& out_mat)
 {
-	if(!fs.is_open()) {
+	if(!fs.is_open())
+	{
 		return false;
 	}
-	if (out_mat.rows == -1 || out_mat.cols == -1) {
+	if (out_mat.rows == -1 || out_mat.cols == -1)
+	{
 		return false;
 	}
-	if(out_mat.empty()) {
+	if(out_mat.empty())
+	{
 		int s = 0;
 		fs.write((const char*)(&s), sizeof(int));
 		return true;
@@ -26,13 +29,15 @@ bool writeMatBinary(std::fstream& fs, const cv::Mat& out_mat)
 
 bool readMatBinary(std::fstream& fs, cv::Mat& in_mat)
 {
-	if(!fs.is_open()) {
+	if(!fs.is_open())
+	{
 		return false;
 	}
 	
 	int rows, cols, type;
 	fs.read((char*)(&rows), sizeof(int));
-	if(rows == 0) {
+	if(rows == 0)
+	{
 		return true;
 	}
 	fs.read((char*)(&cols), sizeof(int));
@@ -47,7 +52,8 @@ bool readMatBinary(std::fstream& fs, cv::Mat& in_mat)
 
 namespace rtabmap_ros {
 
-rtabmap::ParametersMap OccupancyGridBuilder::readRtabmapParameters(int argc, char** argv, const ros::NodeHandle& pnh) {
+rtabmap::ParametersMap OccupancyGridBuilder::readRtabmapParameters(int argc, char** argv, const ros::NodeHandle& pnh)
+{
 	std::string configPath;
 	pnh.param("config_path", configPath, configPath);
 
@@ -157,36 +163,38 @@ rtabmap::ParametersMap OccupancyGridBuilder::readRtabmapParameters(int argc, cha
 	return parameters;
 }
 
-void OccupancyGridBuilder::readParameters(const ros::NodeHandle& pnh) {
+void OccupancyGridBuilder::readParameters(const ros::NodeHandle& pnh)
+{
 	pnh.param("map_path", mapPath_, std::string(""));
 	pnh.param("load_map", loadMap_, false);
 	pnh.param("save_map", saveMap_, false);
 	pnh.param("save_assembled_map", saveAssembledMap_, true);
-	pnh.param("min_semantic_range", min_semantic_range_, (float)0);
-	pnh.param("max_semantic_range", max_semantic_range_, (float)0);
-	if (min_semantic_range_ > 0.)
+	pnh.param("min_semantic_range", minSemanticRange_, (float)0);
+	pnh.param("max_semantic_range", maxSemanticRange_, (float)0);
+	if (minSemanticRange_ > 0.)
 	{
-		min_semantic_range_sqr_ = min_semantic_range_ * min_semantic_range_;
+		minSemanticRangeSqr_ = minSemanticRange_ * minSemanticRange_;
 	}
 	else
 	{
-		min_semantic_range_sqr_ = 0.;
+		minSemanticRangeSqr_ = 0.;
 	}
-	if (max_semantic_range_ > 0.)
+	if (maxSemanticRange_ > 0.)
 	{
-		max_semantic_range_sqr_ = max_semantic_range_ * max_semantic_range_;
+		maxSemanticRangeSqr_ = maxSemanticRange_ * maxSemanticRange_;
 	}
 	else
 	{
-		max_semantic_range_sqr_ = 0.;
+		maxSemanticRangeSqr_ = 0.;
 	}
 }
 
 OccupancyGridBuilder::OccupancyGridBuilder(int argc, char** argv) :
 			CommonDataSubscriber(false),
 			nodeId_(1),
-			last_optimized_pose_time_(0),
-			optimized_poses_buffer_(ros::Duration(10000)) {
+			lastOptimizedPoseTime_(0),
+			optimizedPosesBuffer_(ros::Duration(10000))
+{
 	ros::NodeHandle nh;
 	ros::NodeHandle pnh("~");
 	rtabmap::ParametersMap parameters = readRtabmapParameters(argc, argv, pnh);
@@ -196,66 +204,23 @@ OccupancyGridBuilder::OccupancyGridBuilder(int argc, char** argv) :
 	occupancyGridPub_ = nh.advertise<nav_msgs::OccupancyGrid>("grid_map", 1);
 	coloredOccupancyGridPub_ = nh.advertise<colored_occupancy_grid::ColoredOccupancyGrid>("colored_grid_map", 1);
 	coloredCloudPub_ = nh.advertise<sensor_msgs::PointCloud2>("colored_cloud", 1);
-	if (mapPath_.empty()) {
+	if (mapPath_.empty())
+	{
 		loadMap_ = false;
 		saveMap_ = false;
 	}
-	if (loadMap_) {
+	if (loadMap_)
+	{
 		load();
 	}
 	setupCallbacks(nh, pnh, "DataSubscriber");
 	optimizedPosesSub_ = nh.subscribe("optimized_poses", 1, &OccupancyGridBuilder::updatePoses, this);
 }
 
-void OccupancyGridBuilder::updatePoses(const nav_msgs::Path::ConstPtr& optimized_poses)
+OccupancyGridBuilder::~OccupancyGridBuilder()
 {
-	UScopeMutex lock(mutex_);
-	last_optimized_pose_time_ = optimized_poses->header.stamp;
-	poses_.clear();
-	optimized_poses_buffer_.clear();
-
-	if (optimized_poses->poses.size() == 0)
+	if (saveMap_)
 	{
-		return;
-	}
-
-	const std::string& map_frame = optimized_poses->header.frame_id;
-	const std::string& base_link_frame = optimized_poses->poses[0].header.frame_id;
-	UASSERT(map_frame == map_frame_);
-	UASSERT(base_link_frame == base_link_frame_);
-
-	geometry_msgs::TransformStamped tf;
-	tf.header.frame_id = map_frame;
-	tf.child_frame_id = base_link_frame;
-	for (const auto& pose: optimized_poses->poses)
-	{
-		UASSERT(pose.header.frame_id == base_link_frame);
-		tf.header.stamp = pose.header.stamp;
-		tf.transform.translation.x = pose.pose.position.x;
-		tf.transform.translation.y = pose.pose.position.y;
-		tf.transform.translation.z = pose.pose.position.z;
-		tf.transform.rotation.x = pose.pose.orientation.x;
-		tf.transform.rotation.y = pose.pose.orientation.y;
-		tf.transform.rotation.z = pose.pose.orientation.z;
-		tf.transform.rotation.w = pose.pose.orientation.w;
-		optimized_poses_buffer_.setTransform(tf, "default");
-	}
-
-	for (const auto& id_time: times_)
-	{
-		int nodeId = id_time.first;
-		ros::Time time = id_time.second;
-		try
-		{
-			geometry_msgs::TransformStamped tf = optimized_poses_buffer_.lookupTransform(map_frame_, base_link_frame_, time);
-			poses_[nodeId] = rtabmap_ros::transformFromGeometryMsg(tf.transform);
-		}
-		catch(...) {}
-	}
-}
-
-OccupancyGridBuilder::~OccupancyGridBuilder() {
-	if (saveMap_) {
 		save();
 	}
 }
@@ -364,6 +329,75 @@ void OccupancyGridBuilder::saveOccupancyGridCache() {
 	fs.close();
 }
 
+void OccupancyGridBuilder::updatePoses(const nav_msgs::Path::ConstPtr& optimizedPoses)
+{
+	UScopeMutex lock(mutex_);
+	lastOptimizedPoseTime_ = optimizedPoses->header.stamp;
+	poses_.clear();
+	optimizedPosesBuffer_.clear();
+
+	if (optimizedPoses->poses.size() == 0)
+	{
+		return;
+	}
+
+	const std::string& mapFrame = optimizedPoses->header.frame_id;
+	const std::string& baseLinkFrame = optimizedPoses->poses[0].header.frame_id;
+	UASSERT(mapFrame == mapFrame_);
+	UASSERT(baseLinkFrame == baseLinkFrame_);
+
+	geometry_msgs::TransformStamped tf;
+	tf.header.frame_id = mapFrame;
+	tf.child_frame_id = baseLinkFrame;
+	for (const auto& pose: optimizedPoses->poses)
+	{
+		UASSERT(pose.header.frame_id == baseLinkFrame);
+		tf.header.stamp = pose.header.stamp;
+		tf.transform.translation.x = pose.pose.position.x;
+		tf.transform.translation.y = pose.pose.position.y;
+		tf.transform.translation.z = pose.pose.position.z;
+		tf.transform.rotation.x = pose.pose.orientation.x;
+		tf.transform.rotation.y = pose.pose.orientation.y;
+		tf.transform.rotation.z = pose.pose.orientation.z;
+		tf.transform.rotation.w = pose.pose.orientation.w;
+		optimizedPosesBuffer_.setTransform(tf, "default");
+	}
+
+	for (const auto& idTime: times_)
+	{
+		int nodeId = idTime.first;
+		ros::Time time = idTime.second;
+		try
+		{
+			geometry_msgs::TransformStamped tf = optimizedPosesBuffer_.lookupTransform(mapFrame_, baseLinkFrame_, time);
+			poses_[nodeId] = rtabmap_ros::transformFromGeometryMsg(tf.transform);
+		}
+		catch(...) {}
+	}
+}
+
+nav_msgs::OdometryConstPtr OccupancyGridBuilder::correctOdometry(nav_msgs::OdometryConstPtr odomMsg)
+{
+	if (odomMsg->header.stamp <= lastOptimizedPoseTime_)
+	{
+		nav_msgs::OdometryPtr correctedOdomMsg(new nav_msgs::Odometry(*odomMsg));
+		try
+		{
+			geometry_msgs::TransformStamped tf = optimizedPosesBuffer_.lookupTransform(mapFrame_, baseLinkFrame_, odomMsg->header.stamp);
+			correctedOdomMsg->pose.pose.position.x = tf.transform.translation.x;
+			correctedOdomMsg->pose.pose.position.y = tf.transform.translation.y;
+			correctedOdomMsg->pose.pose.position.z = tf.transform.translation.z;
+			correctedOdomMsg->pose.pose.orientation.x = tf.transform.rotation.x;
+			correctedOdomMsg->pose.pose.orientation.y = tf.transform.rotation.y;
+			correctedOdomMsg->pose.pose.orientation.z = tf.transform.rotation.z;
+			correctedOdomMsg->pose.pose.orientation.w = tf.transform.rotation.w;
+		}
+		catch(...) {}
+		return correctedOdomMsg;
+	}
+	return odomMsg;
+}
+
 void OccupancyGridBuilder::commonDepthCallback(
 				const nav_msgs::OdometryConstPtr& odomMsg,
 				const rtabmap_ros::UserDataConstPtr& userDataMsg,
@@ -376,46 +410,33 @@ void OccupancyGridBuilder::commonDepthCallback(
 				const std::vector<rtabmap_ros::GlobalDescriptor>& globalDescriptorMsgs /* std::vector<rtabmap_ros::GlobalDescriptor>() */,
 				const std::vector<std::vector<rtabmap_ros::KeyPoint>>& localKeyPoints /* std::vector<std::vector<rtabmap_ros::KeyPoint>>() */,
 				const std::vector<std::vector<rtabmap_ros::Point3f>>& localPoints3d /* std::vector<std::vector<rtabmap_ros::Point3f>>() */,
-				const std::vector<cv::Mat>& localDescriptors /* std::vector<cv::Mat>() */) {
+				const std::vector<cv::Mat>& localDescriptors /* std::vector<cv::Mat>() */)
+{
 	UScopeMutex lock(mutex_);
-	if (map_frame_.empty())
+	if (mapFrame_.empty())
 	{
-		map_frame_ = odomMsg->header.frame_id;
-		base_link_frame_ = odomMsg->child_frame_id;
+		mapFrame_ = odomMsg->header.frame_id;
+		baseLinkFrame_ = odomMsg->child_frame_id;
 	}
-
-	nav_msgs::OdometryPtr correctedOdomMsg(new nav_msgs::Odometry(*odomMsg));
-	if (odomMsg->header.stamp <= last_optimized_pose_time_) {
-		try
-		{
-			geometry_msgs::TransformStamped tf = optimized_poses_buffer_.lookupTransform(map_frame_, base_link_frame_, odomMsg->header.stamp);
-			correctedOdomMsg->pose.pose.position.x = tf.transform.translation.x;
-			correctedOdomMsg->pose.pose.position.y = tf.transform.translation.y;
-			correctedOdomMsg->pose.pose.position.z = tf.transform.translation.z;
-			correctedOdomMsg->pose.pose.orientation.x = tf.transform.rotation.x;
-			correctedOdomMsg->pose.pose.orientation.y = tf.transform.rotation.y;
-			correctedOdomMsg->pose.pose.orientation.z = tf.transform.rotation.z;
-			correctedOdomMsg->pose.pose.orientation.w = tf.transform.rotation.w;
-		}
-		catch(...) {
-			return;
-		}
-	}
+	nav_msgs::OdometryConstPtr correctedOdomMsg = correctOdometry(odomMsg);
 
 	MEASURE_BLOCK_TIME(commonDepthCallback);
 	UDEBUG("\n\nReceived new data");
 	UASSERT(isSubscribedToOdom());
 	UASSERT(isSubscribedToRGB());
 	UASSERT(isSubscribedToDepth());
-	std::unique_ptr<rtabmap::Signature> signature_ptr;
-	if (isSubscribedToScan3d()) {
-		signature_ptr = createSignature(correctedOdomMsg, imageMsgs, depthMsgs, cameraInfoMsgs, scan3dMsg,
-														  localKeyPoints, localPoints3d, localDescriptors);
-	} else {
-		signature_ptr = createSignature(correctedOdomMsg, imageMsgs, depthMsgs, cameraInfoMsgs,
+	std::unique_ptr<rtabmap::Signature> signaturePtr;
+	if (isSubscribedToScan3d())
+	{
+		signaturePtr = createSignature(correctedOdomMsg, imageMsgs, depthMsgs, cameraInfoMsgs, scan3dMsg,
 														  localKeyPoints, localPoints3d, localDescriptors);
 	}
-	processNewSignature(*signature_ptr, odomMsg->header.stamp, odomMsg->header.frame_id);
+	else
+	{
+		signaturePtr = createSignature(correctedOdomMsg, imageMsgs, depthMsgs, cameraInfoMsgs,
+														  localKeyPoints, localPoints3d, localDescriptors);
+	}
+	processNewSignature(*signaturePtr, odomMsg->header.stamp, odomMsg->header.frame_id);
 }
 
 void OccupancyGridBuilder::commonLaserScanCallback(
@@ -424,38 +445,22 @@ void OccupancyGridBuilder::commonLaserScanCallback(
 			const sensor_msgs::LaserScan& scanMsg,
 			const sensor_msgs::PointCloud2& scan3dMsg,
 			const rtabmap_ros::OdomInfoConstPtr& odomInfoMsg,
-			const rtabmap_ros::GlobalDescriptor& globalDescriptor /* rtabmap_ros::GlobalDescriptor() */) {
+			const rtabmap_ros::GlobalDescriptor& globalDescriptor /* rtabmap_ros::GlobalDescriptor() */)
+{
 	UScopeMutex lock(mutex_);
-	if (map_frame_.empty())
+	if (mapFrame_.empty())
 	{
-		map_frame_ = odomMsg->header.frame_id;
-		base_link_frame_ = odomMsg->child_frame_id;
+		mapFrame_ = odomMsg->header.frame_id;
+		baseLinkFrame_ = odomMsg->child_frame_id;
 	}
-
-	nav_msgs::OdometryPtr correctedOdomMsg(new nav_msgs::Odometry(*odomMsg));
-	if (odomMsg->header.stamp <= last_optimized_pose_time_) {
-		try
-		{
-			geometry_msgs::TransformStamped tf = optimized_poses_buffer_.lookupTransform(map_frame_, base_link_frame_, odomMsg->header.stamp);
-			correctedOdomMsg->pose.pose.position.x = tf.transform.translation.x;
-			correctedOdomMsg->pose.pose.position.y = tf.transform.translation.y;
-			correctedOdomMsg->pose.pose.position.z = tf.transform.translation.z;
-			correctedOdomMsg->pose.pose.orientation.x = tf.transform.rotation.x;
-			correctedOdomMsg->pose.pose.orientation.y = tf.transform.rotation.y;
-			correctedOdomMsg->pose.pose.orientation.z = tf.transform.rotation.z;
-			correctedOdomMsg->pose.pose.orientation.w = tf.transform.rotation.w;
-		}
-		catch(...) {
-			return;
-		}
-	}
+	nav_msgs::OdometryConstPtr correctedOdomMsg = correctOdometry(odomMsg);
 
 	MEASURE_BLOCK_TIME(commonLaserScanCallback);
 	UDEBUG("\n\nReceived new data");
 	UASSERT(isSubscribedToOdom());
 	UASSERT(isSubscribedToScan3d());
-	std::unique_ptr<rtabmap::Signature> signature_ptr = createSignature(correctedOdomMsg, scan3dMsg);
-	processNewSignature(*signature_ptr, odomMsg->header.stamp, odomMsg->header.frame_id);
+	std::unique_ptr<rtabmap::Signature> signaturePtr = createSignature(correctedOdomMsg, scan3dMsg);
+	processNewSignature(*signaturePtr, odomMsg->header.stamp, odomMsg->header.frame_id);
 }
 
 std::unique_ptr<rtabmap::Signature> OccupancyGridBuilder::createSignature(const nav_msgs::OdometryConstPtr& odomMsg,
@@ -464,7 +469,8 @@ std::unique_ptr<rtabmap::Signature> OccupancyGridBuilder::createSignature(const 
 														 const std::vector<sensor_msgs::CameraInfo>& cameraInfoMsgs,
 														 const std::vector<std::vector<rtabmap_ros::KeyPoint>>& localKeyPointsMsgs,
 														 const std::vector<std::vector<rtabmap_ros::Point3f>>& localPoints3dMsgs,
-														 const std::vector<cv::Mat>& localDescriptorsMsgs) {
+														 const std::vector<cv::Mat>& localDescriptorsMsgs)
+{
 	cv::Mat rgb;
 	cv::Mat depth;
 	std::vector<rtabmap::CameraModel> cameraModels;
@@ -479,9 +485,9 @@ std::unique_ptr<rtabmap::Signature> OccupancyGridBuilder::createSignature(const 
 	UASSERT(convertionOk);
 	rtabmap::SensorData data;
 	data.setRGBDImage(rgb, depth, cameraModels);
-	std::unique_ptr<rtabmap::Signature> signature_ptr(new rtabmap::Signature(data));
-	signature_ptr->setPose(rtabmap_ros::transformFromPoseMsg(odomMsg->pose.pose));
-	return signature_ptr;
+	std::unique_ptr<rtabmap::Signature> signaturePtr(new rtabmap::Signature(data));
+	signaturePtr->setPose(rtabmap_ros::transformFromPoseMsg(odomMsg->pose.pose));
+	return signaturePtr;
 }
 
 std::unique_ptr<rtabmap::Signature> OccupancyGridBuilder::createSignature(const nav_msgs::OdometryConstPtr& odomMsg,
@@ -491,7 +497,8 @@ std::unique_ptr<rtabmap::Signature> OccupancyGridBuilder::createSignature(const 
 														 const sensor_msgs::PointCloud2& scan3dMsg,
 														 const std::vector<std::vector<rtabmap_ros::KeyPoint>>& localKeyPointsMsgs,
 														 const std::vector<std::vector<rtabmap_ros::Point3f>>& localPoints3dMsgs,
-														 const std::vector<cv::Mat>& localDescriptorsMsgs) {
+														 const std::vector<cv::Mat>& localDescriptorsMsgs)
+{
 	rtabmap::LaserScan scan;
 	times_[nodeId_] = odomMsg->header.stamp;
 	bool convertionOk = rtabmap_ros::convertScan3dMsg(scan3dMsg, odomMsg->child_frame_id, "", ros::Time(0), scan, tfListener_, 0);
@@ -519,13 +526,14 @@ std::unique_ptr<rtabmap::Signature> OccupancyGridBuilder::createSignature(const 
 	rtabmap::SensorData data;
 	data.setRGBDImage(rgb, depth, cameraModels);
 	data.setLaserScan(*scanRGB);
-	std::unique_ptr<rtabmap::Signature> signature_ptr(new rtabmap::Signature(data));
-	signature_ptr->setPose(rtabmap_ros::transformFromPoseMsg(odomMsg->pose.pose));
-	return signature_ptr;
+	std::unique_ptr<rtabmap::Signature> signaturePtr(new rtabmap::Signature(data));
+	signaturePtr->setPose(rtabmap_ros::transformFromPoseMsg(odomMsg->pose.pose));
+	return signaturePtr;
 }
 
 std::unique_ptr<rtabmap::Signature> OccupancyGridBuilder::createSignature(const nav_msgs::OdometryConstPtr& odomMsg,
-														 const sensor_msgs::PointCloud2& scan3dMsg) {
+														 const sensor_msgs::PointCloud2& scan3dMsg)
+{
 	rtabmap::LaserScan scan;
 	times_[nodeId_] = odomMsg->header.stamp;
 	bool convertionOk = rtabmap_ros::convertScan3dMsg(scan3dMsg, odomMsg->child_frame_id, "", ros::Time(0), scan, tfListener_, 0);
@@ -533,52 +541,56 @@ std::unique_ptr<rtabmap::Signature> OccupancyGridBuilder::createSignature(const 
 	rtabmap::SensorData data;
 	data.setId(nodeId_);
 	data.setLaserScan(scan);
-	std::unique_ptr<rtabmap::Signature> signature_ptr(new rtabmap::Signature(data));
-	signature_ptr->setPose(rtabmap_ros::transformFromPoseMsg(odomMsg->pose.pose));
-	return signature_ptr;
+	std::unique_ptr<rtabmap::Signature> signaturePtr(new rtabmap::Signature(data));
+	signaturePtr->setPose(rtabmap_ros::transformFromPoseMsg(odomMsg->pose.pose));
+	return signaturePtr;
 }
 
 std::unique_ptr<rtabmap::LaserScan> OccupancyGridBuilder::addRGBToLaserScan(const rtabmap::LaserScan& scan, const cv::Mat& rgb,
 											 const std::vector<rtabmap::CameraModel>& cameraModels,
-											 pcl::PointCloud<pcl::PointXYZRGB>::Ptr coloredCloud) {
+											 pcl::PointCloud<pcl::PointXYZRGB>::Ptr coloredCloud)
+{
 	cv::Mat scanRGB_data = cv::Mat(1, scan.size(),
 		CV_32FC(rtabmap::LaserScan::channels(rtabmap::LaserScan::Format::kXYZRGB)));
 	UASSERT(scan.format() == rtabmap::LaserScan::Format::kXYZ || scan.format() == rtabmap::LaserScan::Format::kXYZI);
 	UASSERT(rgb.type() == CV_8UC3);
 	rtabmap::Transform camera2LaserScan = cameraModels[0].localTransform().inverse() * scan.localTransform();
 	coloredCloud->clear();
-	for (int i = 0; i < scan.size(); i++) {
+	for (int i = 0; i < scan.size(); i++)
+	{
 		float* ptr = scanRGB_data.ptr<float>(0, i);
 		ptr[0] = scan.field(i, 0);
 		ptr[1] = scan.field(i, 1);
 		ptr[2] = scan.field(i, 2);
 
-		cv::Point3f camera_point = rtabmap::util3d::transformPoint(*(cv::Point3f*)(scan.data().ptr<float>(0, i)), camera2LaserScan);
+		cv::Point3f cameraPoint = rtabmap::util3d::transformPoint(*(cv::Point3f*)(scan.data().ptr<float>(0, i)), camera2LaserScan);
 		int u, v;
-		cameraModels[0].reproject(camera_point.x, camera_point.y, camera_point.z, u, v);
-		float camera_point_range_sqr = camera_point.x * camera_point.x + camera_point.y * camera_point.y +
-			camera_point.z * camera_point.z;
-		if (cameraModels[0].inFrame(u, v) && camera_point.z > 0 &&
-			(min_semantic_range_sqr_ == 0. || camera_point_range_sqr > min_semantic_range_sqr_) &&
-			(max_semantic_range_sqr_ == 0. || camera_point_range_sqr < max_semantic_range_sqr_)) {
-
+		cameraModels[0].reproject(cameraPoint.x, cameraPoint.y, cameraPoint.z, u, v);
+		float cameraPointRangeSqr = cameraPoint.x * cameraPoint.x + cameraPoint.y * cameraPoint.y +
+			cameraPoint.z * cameraPoint.z;
+		if (cameraModels[0].inFrame(u, v) && cameraPoint.z > 0 &&
+			(minSemanticRangeSqr_ == 0. || cameraPointRangeSqr > minSemanticRangeSqr_) &&
+			(maxSemanticRangeSqr_ == 0. || cameraPointRangeSqr < maxSemanticRangeSqr_))
+		{
 			int* ptrInt = (int*)ptr;
 			std::uint8_t b, g, r;
-			const std::uint8_t* bgr_color = rgb.ptr<std::uint8_t>(v, u);
-			b = std::max(bgr_color[0], (std::uint8_t)1);
-			g = std::max(bgr_color[1], (std::uint8_t)1);
-			r = std::max(bgr_color[2], (std::uint8_t)1);
+			const std::uint8_t* bgrColor = rgb.ptr<std::uint8_t>(v, u);
+			b = std::max(bgrColor[0], (std::uint8_t)1);
+			g = std::max(bgrColor[1], (std::uint8_t)1);
+			r = std::max(bgrColor[2], (std::uint8_t)1);
 			ptrInt[3] = int(b) | (int(g) << 8) | (int(r) << 16);
 
-			pcl::PointXYZRGB colored_point;
-			colored_point.x = ptr[0];
-			colored_point.y = ptr[1];
-			colored_point.z = ptr[2];
-			colored_point.r = r;
-			colored_point.g = g;
-			colored_point.b = b;
-			coloredCloud->push_back(colored_point);
-		} else {
+			pcl::PointXYZRGB coloredPoint;
+			coloredPoint.x = ptr[0];
+			coloredPoint.y = ptr[1];
+			coloredPoint.z = ptr[2];
+			coloredPoint.r = r;
+			coloredPoint.g = g;
+			coloredPoint.b = b;
+			coloredCloud->push_back(coloredPoint);
+		}
+		else
+		{
 			int* ptrInt = (int*)ptr;
 			ptrInt[3] = 0;
 		}
@@ -590,7 +602,8 @@ std::unique_ptr<rtabmap::LaserScan> OccupancyGridBuilder::addRGBToLaserScan(cons
 	return scanRGB;
 }
 
-void OccupancyGridBuilder::processNewSignature(const rtabmap::Signature& signature, ros::Time stamp, std::string frame_id) {
+void OccupancyGridBuilder::processNewSignature(const rtabmap::Signature& signature, ros::Time stamp, std::string frame_id)
+{
 	addSignatureToOccupancyGrid(signature);
 	nav_msgs::OccupancyGrid map = getOccupancyGridMap();
 	map.header.stamp = stamp;
@@ -598,10 +611,10 @@ void OccupancyGridBuilder::processNewSignature(const rtabmap::Signature& signatu
 	occupancyGridPub_.publish(map);
 	nodeId_++;
 
-	colored_occupancy_grid::ColoredOccupancyGrid colored_map;
-	colored_map.header = map.header;
-	colored_map.info = map.info;
-	colored_map.data = map.data;
+	colored_occupancy_grid::ColoredOccupancyGrid coloredMap;
+	coloredMap.header = map.header;
+	coloredMap.info = map.info;
+	coloredMap.data = map.data;
 	float xMin, yMin;
 	cv::Mat colors = occupancyGrid_.getColors(xMin, yMin);
 	for (int h = 0; h < colors.rows; h++)
@@ -609,15 +622,16 @@ void OccupancyGridBuilder::processNewSignature(const rtabmap::Signature& signatu
 		for (int w = 0; w < colors.cols; w++)
 		{
 			cv::Vec3b color = colors.at<cv::Vec3b>(h, w);
-			colored_map.b.push_back(color[0]);
-			colored_map.g.push_back(color[1]);
-			colored_map.r.push_back(color[2]);
+			coloredMap.b.push_back(color[0]);
+			coloredMap.g.push_back(color[1]);
+			coloredMap.r.push_back(color[2]);
 		}
 	}
-	coloredOccupancyGridPub_.publish(colored_map);
+	coloredOccupancyGridPub_.publish(coloredMap);
 }
 
-void OccupancyGridBuilder::addSignatureToOccupancyGrid(const rtabmap::Signature& signature) {
+void OccupancyGridBuilder::addSignatureToOccupancyGrid(const rtabmap::Signature& signature)
+{
 	cv::Mat groundCells, obstacleCells, emptyCells;
 	cv::Point3f viewPoint;
 	occupancyGrid_.createLocalMap(signature, groundCells, obstacleCells, emptyCells, viewPoint);
@@ -626,7 +640,8 @@ void OccupancyGridBuilder::addSignatureToOccupancyGrid(const rtabmap::Signature&
 	occupancyGrid_.update(poses_);
 }
 
-nav_msgs::OccupancyGrid OccupancyGridBuilder::getOccupancyGridMap() {
+nav_msgs::OccupancyGrid OccupancyGridBuilder::getOccupancyGridMap()
+{
 	float gridCellSize = occupancyGrid_.getCellSize();
 	float xMin, yMin;
 	cv::Mat pixels = occupancyGrid_.getMap(xMin, yMin);

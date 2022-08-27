@@ -56,6 +56,9 @@ private:
 	void saveAssembledOccupancyGrid();
 	void saveOccupancyGridCache();
 
+	void updatePoses(const nav_msgs::Path::ConstPtr& optimizedPoses);
+	nav_msgs::OdometryConstPtr correctOdometry(nav_msgs::OdometryConstPtr odomMsg);
+
 	virtual void commonDepthCallback(
 				const nav_msgs::OdometryConstPtr& odomMsg,
 				const rtabmap_ros::UserDataConstPtr& userDataMsg,
@@ -122,8 +125,6 @@ private:
 	void addSignatureToOccupancyGrid(const rtabmap::Signature& signature);
 	nav_msgs::OccupancyGrid getOccupancyGridMap();
 
-	void updatePoses(const nav_msgs::Path::ConstPtr& optimized_poses);
-
 private:
 	ros::Publisher occupancyGridPub_;
 	ros::Publisher coloredOccupancyGridPub_;
@@ -138,8 +139,8 @@ private:
 	std::map<int, rtabmap::Transform> poses_;
 	std::map<int, ros::Time> times_;
 
-	ros::Time last_optimized_pose_time_;
-	tf2_ros::Buffer optimized_poses_buffer_;
+	ros::Time lastOptimizedPoseTime_;
+	tf2_ros::Buffer optimizedPosesBuffer_;
 
 	UMutex mutex_;
 
@@ -148,13 +149,13 @@ private:
 	bool saveMap_;
 	bool saveAssembledMap_;
 
-	float min_semantic_range_;
-	float max_semantic_range_;
-	float min_semantic_range_sqr_;
-	float max_semantic_range_sqr_;
+	float minSemanticRange_;
+	float maxSemanticRange_;
+	float minSemanticRangeSqr_;
+	float maxSemanticRangeSqr_;
 
-	std::string map_frame_;
-	std::string base_link_frame_;
+	std::string mapFrame_;
+	std::string baseLinkFrame_;
 };
 
 }

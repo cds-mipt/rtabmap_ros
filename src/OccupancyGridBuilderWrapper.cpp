@@ -392,7 +392,10 @@ nav_msgs::OdometryConstPtr OccupancyGridBuilder::correctOdometry(nav_msgs::Odome
 			correctedOdomMsg->pose.pose.orientation.z = tf.transform.rotation.z;
 			correctedOdomMsg->pose.pose.orientation.w = tf.transform.rotation.w;
 		}
-		catch(...) {}
+		catch(...)
+		{
+			return nav_msgs::OdometryConstPtr();
+		}
 		return correctedOdomMsg;
 	}
 	return odomMsg;
@@ -419,6 +422,10 @@ void OccupancyGridBuilder::commonDepthCallback(
 		baseLinkFrame_ = odomMsg->child_frame_id;
 	}
 	nav_msgs::OdometryConstPtr correctedOdomMsg = correctOdometry(odomMsg);
+	if (correctedOdomMsg == nullptr)
+	{
+		return;
+	}
 
 	MEASURE_BLOCK_TIME(commonDepthCallback);
 	UDEBUG("\n\nReceived new data");
@@ -454,6 +461,10 @@ void OccupancyGridBuilder::commonLaserScanCallback(
 		baseLinkFrame_ = odomMsg->child_frame_id;
 	}
 	nav_msgs::OdometryConstPtr correctedOdomMsg = correctOdometry(odomMsg);
+	if (correctedOdomMsg == nullptr)
+	{
+		return;
+	}
 
 	MEASURE_BLOCK_TIME(commonLaserScanCallback);
 	UDEBUG("\n\nReceived new data");

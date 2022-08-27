@@ -138,6 +138,9 @@ private:
 	std::map<int, rtabmap::Transform> poses_;
 	std::map<int, ros::Time> times_;
 
+	ros::Time last_optimized_pose_time_;
+	tf2_ros::Buffer optimized_poses_buffer_;
+
 	UMutex mutex_;
 
 	std::string mapPath_;

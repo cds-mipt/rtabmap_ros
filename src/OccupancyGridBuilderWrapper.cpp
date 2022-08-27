@@ -184,7 +184,9 @@ void OccupancyGridBuilder::readParameters(const ros::NodeHandle& pnh) {
 
 OccupancyGridBuilder::OccupancyGridBuilder(int argc, char** argv) :
 			CommonDataSubscriber(false),
-			nodeId_(1) {
+			nodeId_(1),
+			last_optimized_pose_time_(0),
+			optimized_poses_buffer_(ros::Duration(10000)) {
 	ros::NodeHandle nh;
 	ros::NodeHandle pnh("~");
 	rtabmap::ParametersMap parameters = readRtabmapParameters(argc, argv, pnh);
@@ -208,7 +210,10 @@ OccupancyGridBuilder::OccupancyGridBuilder(int argc, char** argv) :
 void OccupancyGridBuilder::updatePoses(const nav_msgs::Path::ConstPtr& optimized_poses)
 {
 	UScopeMutex lock(mutex_);
+	last_optimized_pose_time_ = optimized_poses->header.stamp;
 	poses_.clear();
+	optimized_poses_buffer_.clear();
+
 	if (optimized_poses->poses.size() == 0)
 	{
 		return;
@@ -219,7 +224,6 @@ void OccupancyGridBuilder::updatePoses(const nav_msgs::Path::ConstPtr& optimized
 	UASSERT(map_frame == map_frame_);
 	UASSERT(base_link_frame == base_link_frame_);
 
-	tf2_ros::Buffer buffer(ros::Duration(10000));
 	geometry_msgs::TransformStamped tf;
 	tf.header.frame_id = map_frame;
 	tf.child_frame_id = base_link_frame;
@@ -234,7 +238,7 @@ void OccupancyGridBuilder::updatePoses(const nav_msgs::Path::ConstPtr& optimized
 		tf.transform.rotation.y = pose.pose.orientation.y;
 		tf.transform.rotation.z = pose.pose.orientation.z;
 		tf.transform.rotation.w = pose.pose.orientation.w;
-		buffer.setTransform(tf, "default");
+		optimized_poses_buffer_.setTransform(tf, "default");
 	}
 
 	for (const auto& id_time: times_)
@@ -243,7 +247,7 @@ void OccupancyGridBuilder::updatePoses(const nav_msgs::Path::ConstPtr& optimized
 		ros::Time time = id_time.second;
 		try
 		{
-			geometry_msgs::TransformStamped tf = buffer.lookupTransform(map_frame_, base_link_frame_, time);
+			geometry_msgs::TransformStamped tf = optimized_poses_buffer_.lookupTransform(map_frame_, base_link_frame_, time);
 			poses_[nodeId] = rtabmap_ros::transformFromGeometryMsg(tf.transform);
 		}
 		catch(...) {}
@@ -374,22 +378,41 @@ void OccupancyGridBuilder::commonDepthCallback(
 				const std::vector<std::vector<rtabmap_ros::Point3f>>& localPoints3d /* std::vector<std::vector<rtabmap_ros::Point3f>>() */,
 				const std::vector<cv::Mat>& localDescriptors /* std::vector<cv::Mat>() */) {
 	UScopeMutex lock(mutex_);
-	MEASURE_BLOCK_TIME(commonDepthCallback);
-	UDEBUG("\n\nReceived new data");
-	UASSERT(isSubscribedToOdom());
-	UASSERT(isSubscribedToRGB());
-	UASSERT(isSubscribedToDepth());
 	if (map_frame_.empty())
 	{
 		map_frame_ = odomMsg->header.frame_id;
 		base_link_frame_ = odomMsg->child_frame_id;
 	}
+
+	nav_msgs::OdometryPtr correctedOdomMsg(new nav_msgs::Odometry(*odomMsg));
+	if (odomMsg->header.stamp <= last_optimized_pose_time_) {
+		try
+		{
+			geometry_msgs::TransformStamped tf = optimized_poses_buffer_.lookupTransform(map_frame_, base_link_frame_, odomMsg->header.stamp);
+			correctedOdomMsg->pose.pose.position.x = tf.transform.translation.x;
+			correctedOdomMsg->pose.pose.position.y = tf.transform.translation.y;
+			correctedOdomMsg->pose.pose.position.z = tf.transform.translation.z;
+			correctedOdomMsg->pose.pose.orientation.x = tf.transform.rotation.x;
+			correctedOdomMsg->pose.pose.orientation.y = tf.transform.rotation.y;
+			correctedOdomMsg->pose.pose.orientation.z = tf.transform.rotation.z;
+			correctedOdomMsg->pose.pose.orientation.w = tf.transform.rotation.w;
+		}
+		catch(...) {
+			return;
+		}
+	}
+
+	MEASURE_BLOCK_TIME(commonDepthCallback);
+	UDEBUG("\n\nReceived new data");
+	UASSERT(isSubscribedToOdom());
+	UASSERT(isSubscribedToRGB());
+	UASSERT(isSubscribedToDepth());
 	std::unique_ptr<rtabmap::Signature> signature_ptr;
 	if (isSubscribedToScan3d()) {
-		signature_ptr = createSignature(odomMsg, imageMsgs, depthMsgs, cameraInfoMsgs, scan3dMsg,
+		signature_ptr = createSignature(correctedOdomMsg, imageMsgs, depthMsgs, cameraInfoMsgs, scan3dMsg,
 														  localKeyPoints, localPoints3d, localDescriptors);
 	} else {
-		signature_ptr = createSignature(odomMsg, imageMsgs, depthMsgs, cameraInfoMsgs,
+		signature_ptr = createSignature(correctedOdomMsg, imageMsgs, depthMsgs, cameraInfoMsgs,
 														  localKeyPoints, localPoints3d, localDescriptors);
 	}
 	processNewSignature(*signature_ptr, odomMsg->header.stamp, odomMsg->header.frame_id);
@@ -403,16 +426,35 @@ void OccupancyGridBuilder::commonLaserScanCallback(
 			const rtabmap_ros::OdomInfoConstPtr& odomInfoMsg,
 			const rtabmap_ros::GlobalDescriptor& globalDescriptor /* rtabmap_ros::GlobalDescriptor() */) {
 	UScopeMutex lock(mutex_);
-	MEASURE_BLOCK_TIME(commonLaserScanCallback);
-	UDEBUG("\n\nReceived new data");
-	UASSERT(isSubscribedToOdom());
-	UASSERT(isSubscribedToScan3d());
 	if (map_frame_.empty())
 	{
 		map_frame_ = odomMsg->header.frame_id;
 		base_link_frame_ = odomMsg->child_frame_id;
 	}
-	std::unique_ptr<rtabmap::Signature> signature_ptr = createSignature(odomMsg, scan3dMsg);
+
+	nav_msgs::OdometryPtr correctedOdomMsg(new nav_msgs::Odometry(*odomMsg));
+	if (odomMsg->header.stamp <= last_optimized_pose_time_) {
+		try
+		{
+			geometry_msgs::TransformStamped tf = optimized_poses_buffer_.lookupTransform(map_frame_, base_link_frame_, odomMsg->header.stamp);
+			correctedOdomMsg->pose.pose.position.x = tf.transform.translation.x;
+			correctedOdomMsg->pose.pose.position.y = tf.transform.translation.y;
+			correctedOdomMsg->pose.pose.position.z = tf.transform.translation.z;
+			correctedOdomMsg->pose.pose.orientation.x = tf.transform.rotation.x;
+			correctedOdomMsg->pose.pose.orientation.y = tf.transform.rotation.y;
+			correctedOdomMsg->pose.pose.orientation.z = tf.transform.rotation.z;
+			correctedOdomMsg->pose.pose.orientation.w = tf.transform.rotation.w;
+		}
+		catch(...) {
+			return;
+		}
+	}
+
+	MEASURE_BLOCK_TIME(commonLaserScanCallback);
+	UDEBUG("\n\nReceived new data");
+	UASSERT(isSubscribedToOdom());
+	UASSERT(isSubscribedToScan3d());
+	std::unique_ptr<rtabmap::Signature> signature_ptr = createSignature(correctedOdomMsg, scan3dMsg);
 	processNewSignature(*signature_ptr, odomMsg->header.stamp, odomMsg->header.frame_id);
 }
 

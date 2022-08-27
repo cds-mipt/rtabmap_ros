@@ -477,13 +477,14 @@ std::unique_ptr<rtabmap::Signature> OccupancyGridBuilder::createSignature(const 
 	std::vector<cv::KeyPoint> keypoints;
 	std::vector<cv::Point3f> points;
 	cv::Mat descriptors;
-	times_[nodeId_] = odomMsg->header.stamp;
 	bool convertionOk = rtabmap_ros::convertRGBDMsgs(imageMsgs, depthMsgs, cameraInfoMsgs, odomMsg->child_frame_id, "", ros::Time(0),
 													 rgb, depth, cameraModels, tfListener_, 0,
 													 localKeyPointsMsgs, localPoints3dMsgs, localDescriptorsMsgs,
 													 &keypoints, &points, &descriptors);
 	UASSERT(convertionOk);
 	rtabmap::SensorData data;
+	data.setStamp(odomMsg->header.stamp.toSec());
+	data.setId(nodeId_);
 	data.setRGBDImage(rgb, depth, cameraModels);
 	std::unique_ptr<rtabmap::Signature> signaturePtr(new rtabmap::Signature(data));
 	signaturePtr->setPose(rtabmap_ros::transformFromPoseMsg(odomMsg->pose.pose));
@@ -500,7 +501,6 @@ std::unique_ptr<rtabmap::Signature> OccupancyGridBuilder::createSignature(const 
 														 const std::vector<cv::Mat>& localDescriptorsMsgs)
 {
 	rtabmap::LaserScan scan;
-	times_[nodeId_] = odomMsg->header.stamp;
 	bool convertionOk = rtabmap_ros::convertScan3dMsg(scan3dMsg, odomMsg->child_frame_id, "", ros::Time(0), scan, tfListener_, 0);
 	UASSERT(convertionOk);
 
@@ -524,6 +524,8 @@ std::unique_ptr<rtabmap::Signature> OccupancyGridBuilder::createSignature(const 
 	coloredCloudPub_.publish(coloredCloudMsg);
 
 	rtabmap::SensorData data;
+	data.setStamp(odomMsg->header.stamp.toSec());
+	data.setId(nodeId_);
 	data.setRGBDImage(rgb, depth, cameraModels);
 	data.setLaserScan(*scanRGB);
 	std::unique_ptr<rtabmap::Signature> signaturePtr(new rtabmap::Signature(data));
@@ -535,10 +537,10 @@ std::unique_ptr<rtabmap::Signature> OccupancyGridBuilder::createSignature(const 
 														 const sensor_msgs::PointCloud2& scan3dMsg)
 {
 	rtabmap::LaserScan scan;
-	times_[nodeId_] = odomMsg->header.stamp;
 	bool convertionOk = rtabmap_ros::convertScan3dMsg(scan3dMsg, odomMsg->child_frame_id, "", ros::Time(0), scan, tfListener_, 0);
 	UASSERT(convertionOk);
 	rtabmap::SensorData data;
+	data.setStamp(odomMsg->header.stamp.toSec());
 	data.setId(nodeId_);
 	data.setLaserScan(scan);
 	std::unique_ptr<rtabmap::Signature> signaturePtr(new rtabmap::Signature(data));
@@ -637,6 +639,7 @@ void OccupancyGridBuilder::addSignatureToOccupancyGrid(const rtabmap::Signature&
 	occupancyGrid_.createLocalMap(signature, groundCells, obstacleCells, emptyCells, viewPoint);
 	occupancyGrid_.addToCache(nodeId_, groundCells, obstacleCells, emptyCells);
 	poses_[nodeId_] = signature.getPose();
+	times_[nodeId_] = ros::Time(signature.getStamp());
 	occupancyGrid_.update(poses_);
 }
 

@@ -307,9 +307,9 @@ void OccupancyGridBuilder::saveOccupancyGridCache() {
 	std::fstream fs(mapPath_, std::fstream::out | std::fstream::binary | std::fstream::trunc);
 	UASSERT(fs.is_open());
 	const auto& cache = occupancyGrid_.getCache();
-	for (const auto& nodeIdgridCells : cache) {
-		int nodeId = nodeIdgridCells.first;
-		const auto& gridCells = nodeIdgridCells.second;
+	for (const auto& nodeIdGridCells : cache) {
+		int nodeId = nodeIdGridCells.first;
+		const auto& gridCells = nodeIdGridCells.second;
 		auto poseIt = poses_.find(nodeId);
 		if (poseIt == poses_.end()) {
 			continue;

@@ -225,19 +225,25 @@ OccupancyGridBuilder::~OccupancyGridBuilder()
 	}
 }
 
-void OccupancyGridBuilder::load() {
-	if (saveLoadAssembledMap_) {
+void OccupancyGridBuilder::load()
+{
+	if (saveLoadAssembledMap_)
+	{
 		loadAssembledOccupancyGrid();
-	} else {
+	}
+	else
+	{
 		loadOccupancyGridCache();
 	}
 }
 
-void OccupancyGridBuilder::loadAssembledOccupancyGrid() {
+void OccupancyGridBuilder::loadAssembledOccupancyGrid()
+{
 	MEASURE_BLOCK_TIME(loadAssembledOccupancyGrid);
 	std::fstream fs(mapPath_, std::fstream::in | std::fstream::binary | std::fstream::app);
 	UASSERT(fs.is_open());
-	if (fs.peek() != EOF) {
+	if (fs.peek() != EOF)
+	{
 		float xMin, yMin, cellSize;
 		fs.read((char*)(&xMin), sizeof(float));
 		fs.read((char*)(&yMin), sizeof(float));
@@ -253,12 +259,14 @@ void OccupancyGridBuilder::loadAssembledOccupancyGrid() {
 	fs.close();
 }
 
-void OccupancyGridBuilder::loadOccupancyGridCache() {
+void OccupancyGridBuilder::loadOccupancyGridCache()
+{
 	MEASURE_BLOCK_TIME(loadOccupancyGridCache);
 	std::fstream fs(mapPath_, std::fstream::in | std::fstream::binary | std::fstream::app);
 	UASSERT(fs.is_open());
 	int maxNodeId = 0;
-	while (fs.peek() != EOF) {
+	while (fs.peek() != EOF)
+	{
 		int nodeId;
 		fs.read((char*)(&nodeId), sizeof(int));
 		if (nodeId > maxNodeId) maxNodeId = nodeId;
@@ -280,15 +288,20 @@ void OccupancyGridBuilder::loadOccupancyGridCache() {
 	fs.close();
 }
 
-void OccupancyGridBuilder::save() {
-	if (saveLoadAssembledMap_) {
+void OccupancyGridBuilder::save()
+{
+	if (saveLoadAssembledMap_)
+	{
 		saveAssembledOccupancyGrid();
-	} else {
+	}
+	else
+	{
 		saveOccupancyGridCache();
 	}
 }
 
-void OccupancyGridBuilder::saveAssembledOccupancyGrid() {
+void OccupancyGridBuilder::saveAssembledOccupancyGrid()
+{
 	MEASURE_BLOCK_TIME(saveAssembledOccupancyGrid);
 	std::fstream fs(mapPath_, std::fstream::out | std::fstream::binary | std::fstream::trunc);
 	UASSERT(fs.is_open());
@@ -302,16 +315,19 @@ void OccupancyGridBuilder::saveAssembledOccupancyGrid() {
 	fs.close();
 }
 
-void OccupancyGridBuilder::saveOccupancyGridCache() {
+void OccupancyGridBuilder::saveOccupancyGridCache()
+{
 	MEASURE_BLOCK_TIME(saveOccupancyGridCache);
 	std::fstream fs(mapPath_, std::fstream::out | std::fstream::binary | std::fstream::trunc);
 	UASSERT(fs.is_open());
 	const auto& cache = occupancyGrid_.getCache();
-	for (const auto& nodeIdGridCells : cache) {
+	for (const auto& nodeIdGridCells : cache)
+	{
 		int nodeId = nodeIdGridCells.first;
 		const auto& gridCells = nodeIdGridCells.second;
 		auto poseIt = poses_.find(nodeId);
-		if (poseIt == poses_.end()) {
+		if (poseIt == poses_.end())
+		{
 			continue;
 		}
 		fs.write((const char*)(&nodeId), sizeof(int));

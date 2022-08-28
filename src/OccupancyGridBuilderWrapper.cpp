@@ -168,7 +168,7 @@ void OccupancyGridBuilder::readParameters(const ros::NodeHandle& pnh)
 	pnh.param("map_path", mapPath_, std::string(""));
 	pnh.param("load_map", loadMap_, false);
 	pnh.param("save_map", saveMap_, false);
-	pnh.param("save_assembled_map", saveAssembledMap_, true);
+	pnh.param("save_load_assembled_map", saveLoadAssembledMap_, true);
 	pnh.param("min_semantic_range", minSemanticRange_, (float)0);
 	pnh.param("max_semantic_range", maxSemanticRange_, (float)0);
 	if (minSemanticRange_ > 0.)
@@ -226,7 +226,7 @@ OccupancyGridBuilder::~OccupancyGridBuilder()
 }
 
 void OccupancyGridBuilder::load() {
-	if (saveAssembledMap_) {
+	if (saveLoadAssembledMap_) {
 		loadAssembledOccupancyGrid();
 	} else {
 		loadOccupancyGridCache();
@@ -281,7 +281,7 @@ void OccupancyGridBuilder::loadOccupancyGridCache() {
 }
 
 void OccupancyGridBuilder::save() {
-	if (saveAssembledMap_) {
+	if (saveLoadAssembledMap_) {
 		saveAssembledOccupancyGrid();
 	} else {
 		saveOccupancyGridCache();

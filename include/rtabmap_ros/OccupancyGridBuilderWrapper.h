@@ -147,7 +147,7 @@ private:
 	std::string mapPath_;
 	bool loadMap_;
 	bool saveMap_;
-	bool saveAssembledMap_;
+	bool saveLoadAssembledMap_;
 
 	float minSemanticRange_;
 	float maxSemanticRange_;

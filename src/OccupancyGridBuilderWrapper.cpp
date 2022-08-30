@@ -16,13 +16,13 @@ bool writeMatBinary(std::fstream& fs, const cv::Mat& out_mat)
 	if(out_mat.empty())
 	{
 		int s = 0;
-		fs.write((const char*)(&s), sizeof(int));
+		fs.write((const char*)(&s), sizeof(s));
 		return true;
 	}
 	int type = out_mat.type();
-	fs.write((const char*)(&out_mat.rows), sizeof(int));
-	fs.write((const char*)(&out_mat.cols), sizeof(int));
-	fs.write((const char*)(&type), sizeof(int));
+	fs.write((const char*)(&out_mat.rows), sizeof(out_mat.rows));
+	fs.write((const char*)(&out_mat.cols), sizeof(out_mat.cols));
+	fs.write((const char*)(&type), sizeof(type));
 	fs.write((const char*)(out_mat.data), out_mat.elemSize() * out_mat.total());
 
 	return true;
@@ -36,13 +36,13 @@ bool readMatBinary(std::fstream& fs, cv::Mat& in_mat)
 	}
 	
 	int rows, cols, type;
-	fs.read((char*)(&rows), sizeof(int));
+	fs.read((char*)(&rows), sizeof(rows));
 	if(rows == 0)
 	{
 		return true;
 	}
-	fs.read((char*)(&cols), sizeof(int));
-	fs.read((char*)(&type), sizeof(int));
+	fs.read((char*)(&cols), sizeof(cols));
+	fs.read((char*)(&type), sizeof(type));
 
 	in_mat.release();
 	in_mat.create(rows, cols, type);
@@ -246,9 +246,9 @@ void OccupancyGridBuilder::loadAssembledOccupancyGrid()
 	if (fs.peek() != EOF)
 	{
 		float xMin, yMin, cellSize;
-		fs.read((char*)(&xMin), sizeof(float));
-		fs.read((char*)(&yMin), sizeof(float));
-		fs.read((char*)(&cellSize), sizeof(float));
+		fs.read((char*)(&xMin), sizeof(xMin));
+		fs.read((char*)(&yMin), sizeof(yMin));
+		fs.read((char*)(&cellSize), sizeof(cellSize));
 		UASSERT(cellSize == occupancyGrid_.getCellSize());
 		cv::Mat map;
 		readMatBinary(fs, map);
@@ -265,23 +265,38 @@ void OccupancyGridBuilder::loadOccupancyGridCache()
 	MEASURE_BLOCK_TIME(loadOccupancyGridCache);
 	std::fstream fs(mapPath_, std::fstream::in | std::fstream::binary | std::fstream::app);
 	UASSERT(fs.is_open());
+
+	UASSERT(fs.peek() != EOF);
+	float cellSize;
+	fs.read((char*)(&cellSize), sizeof(cellSize));
+	UASSERT(cellSize == occupancyGrid_.getCellSize());
+
 	int maxNodeId = 0;
 	while (fs.peek() != EOF)
 	{
 		int nodeId;
-		fs.read((char*)(&nodeId), sizeof(int));
-		if (nodeId > maxNodeId) maxNodeId = nodeId;
-		float cellSize;
-		fs.read((char*)(&cellSize), sizeof(float));
-		UASSERT(cellSize == occupancyGrid_.getCellSize());
 		cv::Mat poseMat;
-		readMatBinary(fs, poseMat);
-		rtabmap::Transform pose(poseMat);
-		poses_[nodeId] = pose;
+		ros::Time time;
 		cv::Mat groundCells, obstacleCells, emptyCells;
+
+		fs.read((char*)(&nodeId), sizeof(nodeId));
+		readMatBinary(fs, poseMat);
+		fs.read((char*)(&time.sec), sizeof(time.sec));
+		fs.read((char*)(&time.nsec), sizeof(time.nsec));
 		readMatBinary(fs, groundCells);
 		readMatBinary(fs, obstacleCells);
 		readMatBinary(fs, emptyCells);
+
+		if (nodeId > maxNodeId)
+		{
+			maxNodeId = nodeId;
+		}
+		rtabmap::Transform pose(poseMat);
+		if (pose != rtabmap::Transform())
+		{
+			poses_[nodeId] = pose;
+		}
+		times_[nodeId] = time;
 		occupancyGrid_.addToCache(nodeId, groundCells, obstacleCells, emptyCells);
 	}
 	occupancyGrid_.update(poses_);
@@ -309,9 +324,9 @@ void OccupancyGridBuilder::saveAssembledOccupancyGrid()
 	float xMin, yMin, cellSize;
 	const cv::Mat& map = occupancyGrid_.getMap(xMin, yMin);
 	cellSize = occupancyGrid_.getCellSize();
-	fs.write((const char*)(&xMin), sizeof(float));
-	fs.write((const char*)(&yMin), sizeof(float));
-	fs.write((const char*)(&cellSize), sizeof(float));
+	fs.write((const char*)(&xMin), sizeof(xMin));
+	fs.write((const char*)(&yMin), sizeof(yMin));
+	fs.write((const char*)(&cellSize), sizeof(cellSize));
 	writeMatBinary(fs, map);
 	fs.close();
 }
@@ -321,24 +336,33 @@ void OccupancyGridBuilder::saveOccupancyGridCache()
 	MEASURE_BLOCK_TIME(saveOccupancyGridCache);
 	std::fstream fs(mapPath_, std::fstream::out | std::fstream::binary | std::fstream::trunc);
 	UASSERT(fs.is_open());
+
+	float cellSize = occupancyGrid_.getCellSize();
+	fs.write((const char*)(&cellSize), sizeof(cellSize));
+
 	const auto& cache = occupancyGrid_.getCache();
 	for (const auto& nodeIdGridCells : cache)
 	{
 		int nodeId = nodeIdGridCells.first;
 		const auto& gridCells = nodeIdGridCells.second;
 		auto poseIt = poses_.find(nodeId);
-		if (poseIt == poses_.end())
-		{
-			continue;
-		}
-		fs.write((const char*)(&nodeId), sizeof(int));
-		float cellSize = occupancyGrid_.getCellSize();
-		fs.write((const char*)(&cellSize), sizeof(float));
-		const cv::Mat& poseMat = poseIt->second.dataMatrix();
+		auto timeIt = times_.find(nodeId);
+		UASSERT(timeIt != times_.end());
 		const cv::Mat& groundCells = gridCells.first.first;
 		const cv::Mat& obstacleCells = gridCells.first.second;
 		const cv::Mat& emptyCells = gridCells.second;
-		writeMatBinary(fs, poseMat);
+
+		fs.write((const char*)(&nodeId), sizeof(nodeId));
+		if (poseIt == poses_.end())
+		{
+			writeMatBinary(fs, rtabmap::Transform().dataMatrix());
+		}
+		else
+		{
+			writeMatBinary(fs, poseIt->second.dataMatrix());
+		}
+		fs.write((const char*)(&timeIt->second.sec), sizeof(timeIt->second.sec));
+		fs.write((const char*)(&timeIt->second.nsec), sizeof(timeIt->second.nsec));
 		writeMatBinary(fs, groundCells);
 		writeMatBinary(fs, obstacleCells);
 		writeMatBinary(fs, emptyCells);

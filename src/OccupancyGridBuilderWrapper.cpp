@@ -1,6 +1,7 @@
 #include "rtabmap_ros/OccupancyGridBuilderWrapper.h"
 
 #include <geometry_msgs/TransformStamped.h>
+#include <tf/transform_datatypes.h>
 
 bool writeMatBinary(std::fstream& fs, const cv::Mat& out_mat)
 {
@@ -348,6 +349,10 @@ void OccupancyGridBuilder::saveOccupancyGridCache()
 void OccupancyGridBuilder::updatePoses(const nav_msgs::Path::ConstPtr& optimizedPoses)
 {
 	UScopeMutex lock(mutex_);
+	if (mapFrame_.empty())
+	{
+		return;
+	}
 	lastOptimizedPoseTime_ = optimizedPoses->header.stamp;
 	poses_.clear();
 	optimizedPosesBuffer_.clear();
@@ -358,17 +363,15 @@ void OccupancyGridBuilder::updatePoses(const nav_msgs::Path::ConstPtr& optimized
 	}
 
 	const std::string& mapFrame = optimizedPoses->header.frame_id;
-	const std::string& baseLinkFrame = optimizedPoses->poses[0].header.frame_id;
 	UASSERT(mapFrame == mapFrame_);
-	UASSERT(baseLinkFrame == baseLinkFrame_);
 
 	geometry_msgs::TransformStamped tf;
+	std::set<std::string> addedPosesFrames;
 	tf.header.frame_id = mapFrame;
-	tf.child_frame_id = baseLinkFrame;
 	for (const auto& pose: optimizedPoses->poses)
 	{
-		UASSERT(pose.header.frame_id == baseLinkFrame);
 		tf.header.stamp = pose.header.stamp;
+		tf.child_frame_id = pose.header.frame_id;
 		tf.transform.translation.x = pose.pose.position.x;
 		tf.transform.translation.y = pose.pose.position.y;
 		tf.transform.translation.z = pose.pose.position.z;
@@ -377,6 +380,17 @@ void OccupancyGridBuilder::updatePoses(const nav_msgs::Path::ConstPtr& optimized
 		tf.transform.rotation.z = pose.pose.orientation.z;
 		tf.transform.rotation.w = pose.pose.orientation.w;
 		optimizedPosesBuffer_.setTransform(tf, "default");
+
+		if (pose.header.frame_id != baseLinkFrame_ &&
+			addedPosesFrames.find(pose.header.frame_id) == addedPosesFrames.end())
+		{
+			tf::StampedTransform tfFromPoseToBaseLinkTF;
+			tfListener_.lookupTransform(pose.header.frame_id, baseLinkFrame_, ros::Time(0), tfFromPoseToBaseLinkTF);
+			geometry_msgs::TransformStamped tfFromPoseToBaseLink;
+			transformStampedTFToMsg(tfFromPoseToBaseLinkTF, tfFromPoseToBaseLink);
+			optimizedPosesBuffer_.setTransform(tfFromPoseToBaseLink, "default", true);
+			addedPosesFrames.insert(pose.header.frame_id);
+		}
 	}
 
 	for (const auto& idTime: times_)

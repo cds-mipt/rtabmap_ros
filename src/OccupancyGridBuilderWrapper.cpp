@@ -169,7 +169,6 @@ void OccupancyGridBuilder::readParameters(const ros::NodeHandle& pnh)
 	pnh.param("map_path", mapPath_, std::string(""));
 	pnh.param("load_map", loadMap_, false);
 	pnh.param("save_map", saveMap_, false);
-	pnh.param("save_load_assembled_map", saveLoadAssembledMap_, true);
 	pnh.param("min_semantic_range", minSemanticRange_, (float)0);
 	pnh.param("max_semantic_range", maxSemanticRange_, (float)0);
 	if (minSemanticRange_ > 0.)
@@ -233,41 +232,7 @@ OccupancyGridBuilder::~OccupancyGridBuilder()
 
 void OccupancyGridBuilder::load()
 {
-	if (saveLoadAssembledMap_)
-	{
-		loadAssembledOccupancyGrid();
-	}
-	else
-	{
-		loadOccupancyGridCache();
-	}
-}
-
-void OccupancyGridBuilder::loadAssembledOccupancyGrid()
-{
-	MEASURE_BLOCK_TIME(loadAssembledOccupancyGrid);
-	std::fstream fs(mapPath_, std::fstream::in | std::fstream::binary | std::fstream::app);
-	UASSERT(fs.is_open());
-	if (fs.peek() != EOF)
-	{
-		float xMin, yMin, cellSize;
-		fs.read((char*)(&xMin), sizeof(xMin));
-		fs.read((char*)(&yMin), sizeof(yMin));
-		fs.read((char*)(&cellSize), sizeof(cellSize));
-		UASSERT(cellSize == occupancyGrid_.getCellSize());
-		cv::Mat map;
-		readMatBinary(fs, map);
-		rtabmap::Transform pose(xMin, yMin, 0);
-		poses_[nodeId_] = pose;
-		nodeId_++;
-		occupancyGrid_.setMap(map, xMin, yMin, cellSize, poses_);
-	}
-	fs.close();
-}
-
-void OccupancyGridBuilder::loadOccupancyGridCache()
-{
-	MEASURE_BLOCK_TIME(loadOccupancyGridCache);
+	MEASURE_BLOCK_TIME(load);
 	std::fstream fs(mapPath_, std::fstream::in | std::fstream::binary | std::fstream::app);
 	UASSERT(fs.is_open());
 
@@ -311,34 +276,7 @@ void OccupancyGridBuilder::loadOccupancyGridCache()
 
 void OccupancyGridBuilder::save()
 {
-	if (saveLoadAssembledMap_)
-	{
-		saveAssembledOccupancyGrid();
-	}
-	else
-	{
-		saveOccupancyGridCache();
-	}
-}
-
-void OccupancyGridBuilder::saveAssembledOccupancyGrid()
-{
-	MEASURE_BLOCK_TIME(saveAssembledOccupancyGrid);
-	std::fstream fs(mapPath_, std::fstream::out | std::fstream::binary | std::fstream::trunc);
-	UASSERT(fs.is_open());
-	float xMin, yMin, cellSize;
-	const cv::Mat& map = occupancyGrid_.getMap(xMin, yMin);
-	cellSize = occupancyGrid_.getCellSize();
-	fs.write((const char*)(&xMin), sizeof(xMin));
-	fs.write((const char*)(&yMin), sizeof(yMin));
-	fs.write((const char*)(&cellSize), sizeof(cellSize));
-	writeMatBinary(fs, map);
-	fs.close();
-}
-
-void OccupancyGridBuilder::saveOccupancyGridCache()
-{
-	MEASURE_BLOCK_TIME(saveOccupancyGridCache);
+	MEASURE_BLOCK_TIME(save);
 	std::fstream fs(mapPath_, std::fstream::out | std::fstream::binary | std::fstream::trunc);
 	UASSERT(fs.is_open());
 

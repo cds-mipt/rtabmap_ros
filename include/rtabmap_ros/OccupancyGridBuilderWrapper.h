@@ -154,6 +154,8 @@ private:
 	float minSemanticRangeSqr_;
 	float maxSemanticRangeSqr_;
 
+	bool needsLocalization_;
+
 	std::string mapFrame_;
 	std::string baseLinkFrame_;
 };
